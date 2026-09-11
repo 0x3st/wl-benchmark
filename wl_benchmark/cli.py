@@ -96,11 +96,25 @@ def _load_run_cfg(path: str) -> dict:
     return cfg
 
 
+def _ask_parallel(run_cfg: dict, args) -> None:
+    """Interactive question: how many parallel workers (default 3)."""
+    if args.jobs is not None:
+        run_cfg["parallel_jobs"] = args.jobs
+        return
+    if not sys.stdin.isatty():
+        return                                  # scripted run: keep default
+    default = int(run_cfg.get("parallel_jobs", 3))
+    raw = input(f"Parallel workers [{default}] (1 = sequential): ").strip()
+    if raw.isdigit() and int(raw) >= 1:
+        run_cfg["parallel_jobs"] = int(raw)
+    else:
+        run_cfg["parallel_jobs"] = default
+
+
 def cmd_run(args) -> None:
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(args.config)
-    if args.jobs is not None:
-        run_cfg["parallel_jobs"] = args.jobs
+    _ask_parallel(run_cfg, args)
     out_dir = run_all(provider, run_cfg,
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
@@ -110,15 +124,26 @@ def cmd_run(args) -> None:
 
 
 def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None:
-    """Default flow: upload the run to the benchmark site, then wipe the
-    local data. Falls back to keeping everything if upload is skipped or
-    fails (a later `wlb publish <run-dir>` can retry)."""
+    """Ask before uploading (nothing is sent automatically). On success
+    print the share link and wipe the local data; on decline keep
+    everything locally (`wlb publish <run-dir>` uploads later)."""
     run_id = os.path.basename(run_dir.rstrip("/"))
     if skip:
         print(f"[cli] upload skipped (--no-upload); local data kept at {run_dir}")
         return
+    n = len(json.load(open(os.path.join(run_dir, "results.json"))))
+    print(f"\n[cli] run complete: {n} task results in {run_dir}")
+    if not sys.stdin.isatty():
+        print("[cli] non-interactive session — upload skipped; local data kept")
+        print(f"      upload later with: wlb publish {run_dir}")
+        return
+    ans = input("Upload results to the benchmark platform now? [Y/n] ").strip().lower()
+    if ans in ("n", "no"):
+        print(f"[cli] local data kept at {run_dir}")
+        print(f"      upload later with: wlb publish {run_dir}")
+        return
     cfg = load_site_config()
-    if cfg is None and sys.stdin.isatty():
+    if cfg is None:
         cfg = prompt_site_config()
     if cfg is None:
         print(f"[cli] site upload not configured — local data kept at {run_dir}")
@@ -203,14 +228,14 @@ def cmd_doctor(args) -> None:
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(
         prog="wlb",
-        description=f"{BRAND} — one provider, one model, "
-                    "interactive target input")
+        description=f"{BRAND} — bare `wlb` starts the guided flow: endpoint "
+                "-> key -> pick a model -> parallelism -> test -> share link")
     p.add_argument("--config", default=DEFAULT_CONFIG,
                    help="optional run-parameter JSON "
                         "(default config/bench.json; may not exist)")
     p.add_argument("-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
-    sub = p.add_subparsers(dest="cmd", required=True)
+    sub = p.add_subparsers(dest="cmd", required=False)
 
     r = sub.add_parser("run",
                        help="ask for endpoint/key/model, then run all tasks")
@@ -251,6 +276,13 @@ def main(argv=None) -> None:
     d.set_defaults(fn=cmd_doctor)
 
     args = p.parse_args(argv)
+    if not getattr(args, "cmd", None):
+        # bare `wlb` — the guided flow (same as `wlb run`)
+        for key, val in (("endpoint", None), ("key", None), ("model", None),
+                         ("tasks", None), ("out", "results"), ("jobs", None),
+                         ("no_upload", False), ("keep", False)):
+            setattr(args, key, val)
+        args.fn = cmd_run
     args.fn(args)
 
 
