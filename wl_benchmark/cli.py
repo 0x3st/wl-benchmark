@@ -26,7 +26,11 @@ from .tasks import TASK_TYPES, build_tasks
 PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_TASKS_ROOT = os.path.join(PKG_DIR, "tasks_data")
 DEFAULT_CONFIG = os.path.join("config", "bench.json")   # optional run params
-VERSION = "0.4.0"
+try:
+    from importlib.metadata import version as _pkg_version
+    VERSION = _pkg_version("wl-benchmark")
+except Exception:   # running from a source checkout without installation
+    VERSION = "0.4.0"
 BRAND = "WL-Benchmark"
 
 
