@@ -50,7 +50,7 @@ def _list_models(base_url: str, api_key: str) -> list:
 def _prompt_provider(args) -> dict:
     """Interactively collect endpoint / key / model.
     --endpoint/--key/--model flags skip the matching prompt."""
-    print(f"{BRAND} — target under test (nothing is stored)")
+    print("wl-benchmark: a general benchmark")
     base_url = (args.endpoint or "").strip()
     while not base_url.startswith(("http://", "https://")):
         base_url = input("Endpoint (OpenAI-compatible, e.g. "
