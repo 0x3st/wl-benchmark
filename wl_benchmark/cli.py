@@ -222,7 +222,7 @@ def cmd_doctor(args) -> None:
     print("review   : essay/svg are graded by humans "
           "(artifacts under results/<run>/artifacts/)")
     print(f"\nverdict: {'READY' if models else 'READY (unverified)'} "
-          f"— run `wlb run` to start")
+          f"— run `wlb` to start")
 
 
 def main(argv=None) -> None:
@@ -235,54 +235,51 @@ def main(argv=None) -> None:
                         "(default config/bench.json; may not exist)")
     p.add_argument("-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
-    sub = p.add_subparsers(dest="cmd", required=False)
+    # no subparsers anymore: a legacy subcommand word (run/publish/report/
+    # doctor/list-tasks) shows up as an unrecognized positional — capture it
+    # quietly so old muscle memory keeps working, undocumented
+    args, extra = p.parse_known_args(argv if argv is not None else None)
+    args.cmd, rest = None, []
+    if extra and not extra[0].startswith("-"):
+        args.cmd, rest = extra[0], extra[1:]
 
-    r = sub.add_parser("run",
-                       help="ask for endpoint/key/model, then run all tasks")
-    r.add_argument("--endpoint", help="skip prompt: OpenAI-compatible base_url")
-    r.add_argument("--key", help="skip prompt: API key")
-    r.add_argument("--model", help="skip prompt: model name")
-    r.add_argument("--tasks", help=f"comma list of {TASK_TYPES}")
-    r.add_argument("--out", default="results")
-    r.add_argument("--jobs", type=int, default=None, metavar="N",
-                   help="parallel task workers (default 3; 1 = sequential)")
-    r.add_argument("--no-upload", action="store_true",
-                   help="do not upload to the benchmark site")
-    r.add_argument("--keep", action="store_true",
-                   help="keep local run data even after a successful upload")
-    r.set_defaults(fn=cmd_run)
-
-    l = sub.add_parser("list-tasks", help="list discovered tasks")
-    l.set_defaults(fn=cmd_list_tasks)
-
-    pb = sub.add_parser("publish",
-                        help="upload a run dir to the benchmark site "
-                             "(then delete it locally)")
-    pb.add_argument("run_dir")
-    pb.add_argument("--keep", action="store_true",
-                    help="keep the local run dir after upload")
-    pb.set_defaults(fn=cmd_publish)
-
-    rp = sub.add_parser("report",
-                        help="rebuild summary.md + review.pdf for a run dir")
-    rp.add_argument("run_dir")
-    rp.set_defaults(fn=cmd_report)
-
-    d = sub.add_parser("doctor",
-                       help="connectivity check (interactive, runs nothing)")
-    d.add_argument("--endpoint")
-    d.add_argument("--key")
-    d.add_argument("--model")
-    d.set_defaults(fn=cmd_doctor)
-
-    args = p.parse_args(argv)
-    if not getattr(args, "cmd", None):
-        # bare `wlb` — the guided flow (same as `wlb run`)
+    if args.cmd is None:
+        # bare `wlb` — the guided flow
         for key, val in (("endpoint", None), ("key", None), ("model", None),
                          ("tasks", None), ("out", "results"), ("jobs", None),
                          ("no_upload", False), ("keep", False)):
             setattr(args, key, val)
         args.fn = cmd_run
+    else:
+        if args.cmd == "run":
+            rp = argparse.ArgumentParser(add_help=False)
+            rp.add_argument("--endpoint"); rp.add_argument("--key")
+            rp.add_argument("--model");    rp.add_argument("--tasks")
+            rp.add_argument("--out", default="results")
+            rp.add_argument("--jobs", type=int, default=None)
+            rp.add_argument("--no-upload", action="store_true")
+            rp.add_argument("--keep", action="store_true")
+        elif args.cmd == "publish":
+            rp = argparse.ArgumentParser(add_help=False)
+            rp.add_argument("run_dir")
+            rp.add_argument("--keep", action="store_true")
+        elif args.cmd == "report":
+            rp = argparse.ArgumentParser(add_help=False)
+            rp.add_argument("run_dir")
+        else:   # doctor / list-tasks
+            rp = argparse.ArgumentParser(add_help=False)
+            rp.add_argument("--endpoint"); rp.add_argument("--key")
+            rp.add_argument("--model")
+        known, _ = rp.parse_known_args(rest)
+        args.__dict__.update(vars(known))
+        fn = {"run": cmd_run, "publish": cmd_publish, "report": cmd_report,
+              "doctor": cmd_doctor,
+              "list-tasks": cmd_list_tasks}.get(args.cmd)
+        if fn is None:
+            p.error(f"unknown command {args.cmd!r} — bare `wlb` starts the "
+                    f"guided flow")
+        args.fn = fn
+
     args.fn(args)
 
 
