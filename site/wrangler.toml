@@ -8,7 +8,7 @@ compatibility_date = "2025-01-01"
 binding = "RUNS"
 # create with:  npx wrangler kv namespace create RUNS
 # then paste the returned id here:
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "09e06d97bf0a4b959a23e43c9eff60e5"
 
 [vars]
 # Public link to this repository's README (shown in the site footer):

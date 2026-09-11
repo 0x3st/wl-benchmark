@@ -81,7 +81,10 @@ def publish_run(run_dir: str, cfg: dict) -> str:
     req = urllib.request.Request(
         cfg["url"] + "/api/runs", data=payload, method="POST",
         headers={"Content-Type": "application/json; charset=utf-8",
-                 "Authorization": f"Bearer {cfg['token']}"})
+                 "Authorization": f"Bearer {cfg['token']}",
+                 # a custom UA: Cloudflare's Browser Integrity Check (error
+                 # 1010) blocks the default Python-urllib signature
+                 "User-Agent": "wl-benchmark/0.4"})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             resp = json.load(r)
