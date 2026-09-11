@@ -210,7 +210,7 @@ def main(argv=None) -> None:
     p = argparse.ArgumentParser(
         prog="wlb", add_help=False,
         description=f"{BRAND} — just run `wlb`; -V prints the version")
-    p.add_argument("-v", "-V", "--version", action="version",
+    p.add_argument("-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
     # power options — undocumented on purpose, the guided flow is the surface
     p.add_argument("--endpoint", help=argparse.SUPPRESS)
