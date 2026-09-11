@@ -37,9 +37,11 @@ class _Progress:
 
     SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
-    def __init__(self, total: int, t0: float, workers: int = 3):
+    def __init__(self, total: int, t0: float, workers: int = 3,
+                 expected_calls: dict | None = None):
         self.total = total
         self.workers = max(1, workers)
+        self.expected = expected_calls or {}   # task_type -> expected calls
         self.finished = 0
         self.failed = 0
         self.entries: dict = {}          # task_id -> dict(type, t0, calls)
@@ -90,12 +92,24 @@ class _Progress:
                  f" · {el_total} elapsed"]
         with self._lock:
             entries = list(self.entries.items())
+        width = 14
         for tid, e in entries[:self.workers]:
             spin = self.SPIN[self._frame]
             el = self._fmt_elapsed(time.time() - e["t0"])
             calls = e["calls"]
+            exp = self.expected.get(e["type"], 0)
+            if exp > 1:
+                # determinate: completed calls over the expected total
+                frac = min(max(0, calls - 1) / exp, 1.0)
+                filled = int(frac * width)
+                bar = "█" * filled + "░" * (width - filled)
+            else:
+                # indeterminate (single long call): bouncing segment
+                pos = self._frame % (width - 3)
+                bar = "░" * pos + "███" + "░" * (width - 3 - pos)
             lines.append(f"  {spin} {e['type']:<10} {tid:<24} "
-                         f"{el:>6} · {calls} call{'s' if calls != 1 else ''}")
+                         f"[{bar}] {el:>6} · "
+                         f"{calls} call{'s' if calls != 1 else ''}")
         # clear the previously drawn block, then draw the new one
         out = ["\r\x1b[2K"]
         out += ["\x1b[1A\x1b[2K"] * (self._last_lines - 1)
@@ -166,7 +180,11 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
     # ---- single-line progress bar (no streaming logs) ------------------
-    progress = _Progress(len(tasks), t0, workers=jobs)
+    expected = {"essay": 1, "svg": 1,
+                "scheduling": run_cfg.get("scheduling_max_turns", 16) + 1,
+                "quant": run_cfg.get("quant_max_turns", 16) + 1}
+    progress = _Progress(len(tasks), t0, workers=jobs,
+                         expected_calls=expected)
 
     def report(r):
         progress.finish(r)
