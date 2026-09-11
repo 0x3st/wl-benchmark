@@ -185,7 +185,12 @@ def do_upload(run_dir: str, keep: bool = False) -> None:
     if cfg is None:
         print("[upload] no platform configuration — nothing sent")
         return
-    url = publish_run(run_dir, cfg)
+    try:
+        url = publish_run(run_dir, cfg)
+    except Exception as e:  # noqa: BLE001
+        print(f"[upload] FAILED — local data kept at {run_dir}")
+        print(f"         {e}")
+        raise SystemExit(1)
     print(f"[cli] share link: {url}")
     if keep:
         print(f"[cli] local data kept: {run_dir}")
@@ -205,7 +210,7 @@ def main(argv=None) -> None:
     p = argparse.ArgumentParser(
         prog="wlb", add_help=False,
         description=f"{BRAND} — just run `wlb`; -V prints the version")
-    p.add_argument("-V", "--version", action="version",
+    p.add_argument("-v", "-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
     # power options — undocumented on purpose, the guided flow is the surface
     p.add_argument("--endpoint", help=argparse.SUPPRESS)
@@ -230,6 +235,13 @@ def main(argv=None) -> None:
         do_report(args.report)
         return
 
-    cmd_run(args)
+    try:
+        cmd_run(args)
+    except KeyboardInterrupt:
+        print("\n[cli] interrupted — nothing was uploaded, local data kept")
+        raise SystemExit(130)
+    except EOFError:
+        print("\n[cli] input closed — nothing was uploaded, local data kept")
+        raise SystemExit(130)
 
 

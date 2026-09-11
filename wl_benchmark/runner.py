@@ -104,8 +104,11 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     finished: set = set()   # task_ids with a recorded result
     failed: set = set()     # error/skipped — blocks dependents
     context_store: dict = {}
+    dump()                  # results.json exists from second zero
 
-    with ThreadPoolExecutor(max_workers=jobs) as pool:
+    interrupted = False
+    pool = ThreadPoolExecutor(max_workers=jobs)
+    try:
         futures = {}          # future -> task_id
         while len(finished) < len(tasks):
             # submit every task whose deps are satisfied
@@ -147,7 +150,18 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                         failed.add(t.task_id)
                         report(r)
                 continue
-            done_futs, _ = wait(list(futures), return_when=FIRST_COMPLETED)
+            try:
+                done_futs, _ = wait(list(futures),
+                                    return_when=FIRST_COMPLETED)
+            except KeyboardInterrupt:
+                # cancel everything queued; running API calls cannot be
+                # interrupted, so exit hard after dumping what we have —
+                # otherwise the executor's atexit join would hang until
+                # the provider timeout
+                for f in futures:
+                    f.cancel()
+                interrupted = True
+                break
             for fut in done_futs:
                 tid = futures.pop(fut)
                 r = fut.result()
@@ -160,7 +174,19 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                     context_store[tid] = r
                 report(r)
 
-    print(f"\n[runner] done in {(time.time()-t0)/60:.1f} min -> {out_dir}")
+        if not interrupted:
+            print(f"\n[runner] done in {(time.time()-t0)/60:.1f} min "
+                  f"-> {out_dir}")
+    finally:
+        # on Ctrl+C: drop the queue, do NOT wait for in-flight API calls —
+        # the incremental dump already persisted every finished result
+        pool.shutdown(wait=interrupted is False, cancel_futures=interrupted)
+
+    if interrupted:
+        print(f"\n[runner] interrupted by user — completed results kept "
+              f"at {out_dir} (upload later with: wlb --upload {out_dir})",
+              flush=True)
+        os._exit(130)    # skip the executor's atexit join; data is dumped
 
     # compile the single human-review PDF
     try:
