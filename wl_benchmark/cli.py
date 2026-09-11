@@ -211,7 +211,7 @@ def main(argv=None) -> None:
         prog="wlb", add_help=False,
         description=f"{BRAND} — just run `wlb`; -V prints the version")
     p.add_argument("-V", "--version", action="version",
-                   version=f"{BRAND} {VERSION}")
+                   version=f"wl-benchmark {VERSION}")
     # power options — undocumented on purpose, the guided flow is the surface
     p.add_argument("--endpoint", help=argparse.SUPPRESS)
     p.add_argument("--key", help=argparse.SUPPRESS)
