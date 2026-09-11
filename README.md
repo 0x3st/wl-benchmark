@@ -145,42 +145,48 @@ tap in one go.
 
 ## Usage
 
-The tool is self-contained (Python standard library only, no third-party dependencies). It is a pure instrument: **no provider presets are stored** — every run interactively asks for the target under test.
+Bare `wlb` is the whole interface — a guided flow:
+
+```text
+$ wlb
+WL-Benchmark — target under test (nothing is stored)
+Endpoint (OpenAI-compatible, e.g. https://api.example.com/v1): https://…
+API key (input hidden): ********
+The endpoint offers 25 models:
+  1. gpt-4o
+  2. claude-...
+Pick a number, or type a model name: 2
+Parallel workers [3] (1 = sequential): ↵
+provider : ...   model: ...   tasks: 8
+start essay 01-storytelling
+...
+OK [scheduling] term-plan-2627t1-01 — 0.95
+
+[cli] run complete: 8 task results in results/20260911-...
+Upload results to the benchmark platform now? [Y/n] y
+[cli] share link: https://wl-benchmark.leiwu3.workers.dev/r/20260911-...
+[cli] local run data deleted
+```
+
+- The endpoint's model list is fetched after the key is entered, so you pick by number.
+- Independent tasks run concurrently (default 3 workers); the research
+  proposal waits for the two earlier writings it consumes.
+- **Nothing is uploaded automatically** — answer `n` and the run stays
+  local; upload later with `wlb --upload results/<timestamp>`.
+- If a newer release exists on PyPI, `wlb` offers to self-update before
+  testing (pip / pipx / Homebrew aware; a git checkout prints
+  `git pull` instead).
+
+Power flags (undocumented in `--help` on purpose):
 
 ```bash
-# Connectivity check: asks for endpoint/key/model, verifies and exits
-./wlb doctor
-
-# List the discovered tasks
-./wlb list-tasks
-
-# Run the full suite: asks for endpoint -> API key (hidden) -> model
-# (after key input it fetches the endpoint's model list, so you can pick by number)
-# By default every finished run is uploaded to the benchmark platform
-# (share link printed, local run data then deleted)
-./wlb run
-
-# Non-interactive (script-friendly), optionally restricted to some domains
-./wlb run --endpoint https://api.example.com/v1 --key sk-xxx --model model-a \
-    --tasks essay,svg
-
-# Parallelism: independent tasks run concurrently (default 3 workers);
-# chained tasks (the research proposal reads the two earlier writings)
-# still wait for their dependencies. --jobs 1 = strictly sequential.
-./wlb run --jobs 6     # more workers
-./wlb run --jobs 1     # sequential
-
-# Keep the local run data instead of deleting it after upload
-./wlb run --keep
-
-# Skip the platform entirely (results stay local)
-./wlb run --no-upload
-
-# Re-upload a run whose upload failed (kept locally in that case)
-./wlb publish results/<timestamp>
-
-# Rebuild the summary of a finished run
-./wlb report results/<timestamp>/
+wlb --endpoint https://api.example.com/v1 --key sk-xxx --model model-a
+wlb --tasks essay,svg          # run a subset of domains
+wlb --jobs 6                   # more parallel workers (1 = sequential)
+wlb --keep                     # keep local run data after upload
+wlb --no-upload                # never ask, never upload
+wlb --upload results/<ts>      # send a local run to the platform
+wlb --report results/<ts>      # rebuild summary.md + review.pdf
 ```
 
 Install as a global command: `pip install .` (provides `wlb`), or symlink `ln -sf $(pwd)/wlb /usr/local/bin/wlb`.
@@ -197,7 +203,7 @@ Everything lands in `results/<timestamp>/`:
 | `artifacts/` | individual artifacts: essays `*.md`, drawings `*.svg` + `*.png` |
 | `config.snapshot.json` | run-configuration snapshot (key masked) |
 
-`review.pdf` is generated automatically at the end of every run; `./wlb report results/<timestamp>/` regenerates both files anytime.
+`review.pdf` is generated automatically at the end of every run; `wlb --report results/<timestamp>/` regenerates both files anytime.
 
 ### Human review flow
 

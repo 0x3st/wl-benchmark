@@ -18,6 +18,7 @@ import urllib.request
 
 from .publisher import (cleanup_run, load_site_config, prompt_site_config,
                         publish_run)
+from .selfupdate import check_background, maybe_upgrade
 from .reporter import write_report
 from .review_pdf import build_review_pdf
 from .runner import run_all
@@ -112,9 +113,19 @@ def _ask_parallel(run_cfg: dict, args) -> None:
 
 
 def cmd_run(args) -> None:
+    interactive = sys.stdin.isatty()
+    update_th, update_box = (check_background() if interactive
+                             else (None, None))
+
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(args.config)
     _ask_parallel(run_cfg, args)
+
+    # the user spent seconds typing endpoint/key — the PyPI lookup had
+    # time to finish; surface an upgrade offer before any test runs
+    if update_th is not None:
+        update_th.join(timeout=2.0)
+        maybe_upgrade(update_box[0], interactive=interactive)
     out_dir = run_all(provider, run_cfg,
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
@@ -140,7 +151,7 @@ def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None
     ans = input("Upload results to the benchmark platform now? [Y/n] ").strip().lower()
     if ans in ("n", "no"):
         print(f"[cli] local data kept at {run_dir}")
-        print(f"      upload later with: wlb publish {run_dir}")
+        print(f"      upload later with: wlb --upload {run_dir}")
         return
     cfg = load_site_config()
     if cfg is None:
@@ -165,64 +176,29 @@ def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None
         print(f"[cli] local run data deleted: {run_dir}")
 
 
-def cmd_list_tasks(args) -> None:
-    run_cfg = _load_run_cfg(args.config)
-    tasks = build_tasks(run_cfg.get("tasks_data_root", DEFAULT_TASKS_ROOT),
-                        run_cfg, artifacts_root="/tmp/wl-bench-list")
-    print(f"{len(tasks)} task(s):")
-    for t in tasks:
-        extra = ""
-        if t.task_type == "essay":
-            extra = f"  rubric={os.path.basename(t.spec.get('rubric') or '-')}"
-        elif t.task_type == "svg":
-            extra = f"  stage={t.spec.get('stage')}"
-        print(f"  [{t.task_type:10s}] {t.task_id}{extra}")
 
-
-def cmd_publish(args) -> None:
+def do_upload(run_dir: str, keep: bool = False) -> None:
+    """--upload RUN_DIR: send a local run to the platform (retry path)."""
     cfg = load_site_config()
     if cfg is None:
         cfg = prompt_site_config()
     if cfg is None:
-        print("[publish] no Cloudflare configuration — nothing uploaded")
+        print("[upload] no platform configuration — nothing sent")
         return
-    url = publish_run(args.run_dir, cfg)
-    print(f"[publish] {url}")
-    if args.keep:
-        print(f"[publish] local data kept: {args.run_dir}")
-    elif cleanup_run(args.run_dir):
-        print(f"[publish] local run data deleted: {args.run_dir}")
+    url = publish_run(run_dir, cfg)
+    print(f"[cli] share link: {url}")
+    if keep:
+        print(f"[cli] local data kept: {run_dir}")
+    elif cleanup_run(run_dir):
+        print(f"[cli] local run data deleted: {run_dir}")
 
 
-def cmd_report(args) -> None:
-    write_report(args.run_dir)
-    pdf = build_review_pdf(args.run_dir)
-    print(f"summary  -> {os.path.relpath(os.path.join(args.run_dir, 'summary.md'))}")
-    print(f"review   -> {pdf}")
-
-
-def cmd_doctor(args) -> None:
-    """Connectivity check: interactive too; runs no tasks, stores nothing."""
-    provider = _prompt_provider(args)
-    models = _list_models(provider["base_url"], provider["api_key"])
-    print(f"\nendpoint : {provider['base_url']}")
-    print(f"model    : {provider['model']}")
-    if models:
-        found = provider["model"] in models
-        print(f"reachable: YES, {len(models)} models; "
-              f"model {'found' if found else 'NOT in list (may still work)'}")
-    else:
-        print("reachable: /models unavailable (may still work for chat)")
-
-    run_cfg = _load_run_cfg(args.config)
-    tasks = build_tasks(run_cfg.get("tasks_data_root", DEFAULT_TASKS_ROOT),
-                        run_cfg, artifacts_root="/tmp/wl-bench-doctor")
-    print(f"tasks    : {len(tasks)} loaded "
-          f"({', '.join(sorted({t.task_type for t in tasks}))})")
-    print("review   : essay/svg are graded by humans "
-          "(artifacts under results/<run>/artifacts/)")
-    print(f"\nverdict: {'READY' if models else 'READY (unverified)'} "
-          f"— run `wlb` to start")
+def do_report(run_dir: str) -> None:
+    """--report RUN_DIR: rebuild summary.md + review.pdf locally."""
+    write_report(run_dir)
+    pdf = build_review_pdf(run_dir)
+    print(f"summary -> {os.path.relpath(os.path.join(run_dir, 'summary.md'))}")
+    print(f"review  -> {pdf}")
 
 
 def main(argv=None) -> None:
@@ -235,53 +211,26 @@ def main(argv=None) -> None:
                         "(default config/bench.json; may not exist)")
     p.add_argument("-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
-    # no subparsers anymore: a legacy subcommand word (run/publish/report/
-    # doctor/list-tasks) shows up as an unrecognized positional — capture it
-    # quietly so old muscle memory keeps working, undocumented
-    args, extra = p.parse_known_args(argv if argv is not None else None)
-    args.cmd, rest = None, []
-    if extra and not extra[0].startswith("-"):
-        args.cmd, rest = extra[0], extra[1:]
+    # power options — undocumented on purpose, the guided flow is the surface
+    p.add_argument("--endpoint", help=argparse.SUPPRESS)
+    p.add_argument("--key", help=argparse.SUPPRESS)
+    p.add_argument("--model", help=argparse.SUPPRESS)
+    p.add_argument("--tasks", help=argparse.SUPPRESS)
+    p.add_argument("--out", default="results", help=argparse.SUPPRESS)
+    p.add_argument("--jobs", type=int, default=None, help=argparse.SUPPRESS)
+    p.add_argument("--no-upload", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--keep", action="store_true", help=argparse.SUPPRESS)
+    p.add_argument("--upload", metavar="RUN_DIR", help=argparse.SUPPRESS)
+    p.add_argument("--report", metavar="RUN_DIR", help=argparse.SUPPRESS)
+    args = p.parse_args(argv)
 
-    if args.cmd is None:
-        # bare `wlb` — the guided flow
-        for key, val in (("endpoint", None), ("key", None), ("model", None),
-                         ("tasks", None), ("out", "results"), ("jobs", None),
-                         ("no_upload", False), ("keep", False)):
-            setattr(args, key, val)
-        args.fn = cmd_run
-    else:
-        if args.cmd == "run":
-            rp = argparse.ArgumentParser(add_help=False)
-            rp.add_argument("--endpoint"); rp.add_argument("--key")
-            rp.add_argument("--model");    rp.add_argument("--tasks")
-            rp.add_argument("--out", default="results")
-            rp.add_argument("--jobs", type=int, default=None)
-            rp.add_argument("--no-upload", action="store_true")
-            rp.add_argument("--keep", action="store_true")
-        elif args.cmd == "publish":
-            rp = argparse.ArgumentParser(add_help=False)
-            rp.add_argument("run_dir")
-            rp.add_argument("--keep", action="store_true")
-        elif args.cmd == "report":
-            rp = argparse.ArgumentParser(add_help=False)
-            rp.add_argument("run_dir")
-        else:   # doctor / list-tasks
-            rp = argparse.ArgumentParser(add_help=False)
-            rp.add_argument("--endpoint"); rp.add_argument("--key")
-            rp.add_argument("--model")
-        known, _ = rp.parse_known_args(rest)
-        args.__dict__.update(vars(known))
-        fn = {"run": cmd_run, "publish": cmd_publish, "report": cmd_report,
-              "doctor": cmd_doctor,
-              "list-tasks": cmd_list_tasks}.get(args.cmd)
-        if fn is None:
-            p.error(f"unknown command {args.cmd!r} — bare `wlb` starts the "
-                    f"guided flow")
-        args.fn = fn
+    if args.upload:
+        do_upload(args.upload, keep=args.keep)
+        return
+    if args.report:
+        do_report(args.report)
+        return
 
-    args.fn(args)
+    cmd_run(args)
 
 
-if __name__ == "__main__":
-    main()
