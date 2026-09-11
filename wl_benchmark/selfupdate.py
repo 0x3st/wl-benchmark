@@ -24,7 +24,6 @@ from pathlib import Path
 
 PYPI_JSON = "https://pypi.org/pypi/wl-benchmark/json"
 PKG = "wl-benchmark"
-TTL = 6 * 3600
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
              ) / "wlb" / "version-check.json"
 
@@ -74,20 +73,37 @@ def _cache_write(latest: str) -> None:
         pass
 
 
-def latest_pypi(timeout: float = 2.0) -> str | None:
-    """Latest version on PyPI; 6 h disk cache; None on any failure."""
-    cached = _cache_read(TTL)
-    if cached:
-        return cached
+def _fetch(timeout: float, bypass_proxy: bool = False) -> str | None:
     try:
+        if bypass_proxy:
+            # macOS system proxies (urllib.getproxies) often point at a
+            # local proxy app that is not running — retry direct
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        else:
+            opener = urllib.request.build_opener()
         req = urllib.request.Request(PYPI_JSON,
                                      headers={"User-Agent": "wl-benchmark"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            latest = json.load(r)["info"]["version"]
+        with opener.open(req, timeout=timeout) as r:
+            return json.load(r)["info"]["version"]
+    except Exception:        # noqa: BLE001
+        return None
+
+
+def latest_pypi(timeout: float = 2.5) -> str | None:
+    """Latest version on PyPI.
+
+    Every interactive run fetches fresh (the lookup runs in a background
+    thread while the user types). Order: normal -> direct (proxy
+    bypassed) -> stale disk cache as last resort. None only when every
+    path failed.
+    """
+    latest = _fetch(timeout)
+    if latest is None:
+        latest = _fetch(timeout, bypass_proxy=True)
+    if latest is not None:
         _cache_write(latest)
         return latest
-    except Exception:        # noqa: BLE001 — offline must stay silent
-        return None
+    return _cache_read(10 ** 9)   # offline fallback: any-age cache
 
 
 # --------------------------------------------------------------- update
