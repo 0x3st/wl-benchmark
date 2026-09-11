@@ -114,18 +114,17 @@ def _ask_parallel(run_cfg: dict, args) -> None:
 
 def cmd_run(args) -> None:
     interactive = sys.stdin.isatty()
-    update_th, update_box = (check_background() if interactive
-                             else (None, None))
+
+    # FIRST thing: is there a newer release? (background lookup, capped
+    # wait — offline/slow network must not block the flow)
+    if interactive:
+        update_th, update_box = check_background()
+        update_th.join(timeout=2.5)
+        maybe_upgrade(update_box[0], interactive=interactive)
 
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(DEFAULT_CONFIG)
     _ask_parallel(run_cfg, args)
-
-    # the user spent seconds typing endpoint/key — the PyPI lookup had
-    # time to finish; surface an upgrade offer before any test runs
-    if update_th is not None:
-        update_th.join(timeout=2.0)
-        maybe_upgrade(update_box[0], interactive=interactive)
     out_dir = run_all(provider, run_cfg,
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
