@@ -92,6 +92,9 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
         dump()
 
     def run_one(task, snapshot):
+        # printed from the worker thread — reflects ACTUAL concurrency,
+        # not queue submission (max_workers lines can be open at once)
+        print(f"start {task.task_type} {task.task_id}", flush=True)
         try:
             return task.run(client, model, context=snapshot)
         except Exception as e:  # noqa: BLE001
@@ -131,7 +134,6 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                     # snapshot: the task must not see later context writes
                     snap = dict(context_store)
                     futures[pool.submit(run_one, t, snap)] = tid
-                    print(f"start {t.task_type} {tid}", flush=True)
             if not futures:
                 # nothing running and nothing submittable — unsatisfiable
                 # deps (e.g. --tasks filtered out a dependency); finish the
