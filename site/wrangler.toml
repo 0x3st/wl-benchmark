@@ -10,11 +10,12 @@ binding = "RUNS"
 # then paste the returned id here:
 id = "09e06d97bf0a4b959a23e43c9eff60e5"
 
+# Custom domain (requires the zone wulei.org in the same Cloudflare account;
+# the DNS record is created automatically on deploy):
+routes = [
+  { pattern = "benchmark.wulei.org", custom_domain = true }
+]
+
 [vars]
 # Public link to this repository's README (shown in the site footer):
 DOCS_URL = "https://github.com/0x3st/wl-benchmark#readme"
-
-# Custom domain (requires the zone, e.g. wulei.org, in the same account):
-# routes = [
-#   { pattern = "benchmark.wulei.org", custom_domain = true }
-# ]
