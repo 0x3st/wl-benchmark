@@ -1,10 +1,10 @@
 # WL-Benchmark
 
-**The New AI Benchmark for General Tasks.**
+**A new general benchmark.**
 
 A benchmark for CUHK Shenzhen with its unique context and background information, packaged as a self-contained CLI tool (`wlb`). However, it's not exclusive for a single university, since it could somehow tell the real ability of a model, regardless the background information (university).
 
-This benchmark cares about general agent tasks, not only coding capability. It will not evaluate the output, leaving the right to human.
+This benchmark cares about general agent tasks, not only coding capability. Scoreable parts are graded programmatically; taste-bound parts (essays, drawings, research notes) are left to human review.
 
 ## What makes a good benchmark (for us)?
 
@@ -16,7 +16,7 @@ As a benchmark in a "NewAPI/Sub2API/CliProxyAPI" era, we do not put too much wei
 
 ## How scoring works
 
-- **Programmatic scoring** (no model judge): tool use (count of correct operations) and scheduling (constraint solving).
+- **Programmatic scoring** (no model judge): scheduling (ten weighted rule checks) and the numeric answers of the quant research task (per-question tolerances against an answer key computed at generation time).
 - **Human review**: essays (graded against the RUBIC) and SVG drawings (graded from the rendered PNG). The harness only generates the artifacts and saves them; a human opens them and scores.
 
 ## Benchmark domains
@@ -34,8 +34,6 @@ This task also carries the **tool use and function calling** dimension: the four
 The raw materials are NOT given in the prompt. The model must gather every fact itself through four pseudo tools — `search_registry` (rule documents), `query_transcript`, `query_prerequisite`, `search_course_offering` — and the search corpus contains noise: the OLD GE rule version (2017-22 admits: "GEW counts toward the GE core") next to the current one, the FinTech-stream study scheme next to the Quantitative Finance one, and the offering search hides the not-offered courses behind explicit "not offered" responses.
 
 After researching, the AI must audit its own remaining requirements and submit the plan through the only documented tool, `enroll` (batch or one call per course) — the opaque research tools stay undescribed, but the answer channel is explicit. The enroll tool accepts any well-formed submission blindly (no conflict/prereq validation feedback — otherwise a model could brute-force the unique solution through the SIS). A text-JSON fallback exists for models that never call `enroll`. The plan:
-
-- retake the two withdrawn (W) courses — ECO3121 and MAT3007;
 
 - retake the two withdrawn (W) courses — ECO3121 and MAT3007;
 - take every offered major-required course whose prerequisites are completed — and exclude the **prerequisite trap** FIN4120 (its prereq FIN3080 is only in progress);
@@ -92,7 +90,7 @@ The AI is asked once. The output is still an SVG file.
 
 ### Essay Writing with RUBRIC
 
-RUBICs for the three writing tests are adapted from the school-provided RUBIC1.docx (same dimensions, weights, level bands and deduction rules); the original sheet is kept at `wl_benchmark/tasks_data/essay/_source/RUBIC1.docx`. The rubric is provided to the model as a photo (multimodal) by default; text/PDF modes are switchable.
+RUBICs for the three writing tests are adapted from the school-provided RUBIC1.docx (same dimensions, weights, level bands and deduction rules). The rubric is provided to the model as a photo (multimodal) by default; text/PDF modes are switchable.
 
 Every writing task now carries **machine-checked hard constraints** on top of the rubric quality dimensions: language-section headings, English word-range and Chinese character-range windows, required scene/section headings, typed evidence tags, boundary conditions, method-rigor keywords. The harness verifies each constraint programmatically and the result table is printed in the review PDF (suggested -5 per violated constraint, reviewer confirms).
 
@@ -133,7 +131,7 @@ brew install wlb
 # From source
 pip install .
 # or run directly from a checkout, no install:
-./wlb --help
+./wlb
 ```
 
 The package is Python >= 3.9 with **zero third-party dependencies**
@@ -149,7 +147,7 @@ Bare `wlb` is the whole interface — a guided flow:
 
 ```text
 $ wlb
-WL-Benchmark — target under test (nothing is stored)
+wl-benchmark: a general benchmark
 Endpoint (OpenAI-compatible, e.g. https://api.example.com/v1): https://…
 API key (input hidden): ********
 The endpoint offers 25 models:
@@ -164,7 +162,7 @@ OK [scheduling] term-plan-2627t1-01 — 0.95
 
 [cli] run complete: 8 task results in results/20260911-...
 Upload results to the benchmark platform now? [Y/n] y
-[cli] share link: https://wl-benchmark.leiwu3.workers.dev/r/20260911-...
+[cli] share link: https://benchmark.wulei.org/r/20260911-...
 [cli] local run data deleted
 ```
 
@@ -189,8 +187,6 @@ wlb --upload results/<ts>      # send a local run to the platform
 wlb --report results/<ts>      # rebuild summary.md + review.pdf
 ```
 
-Install as a global command: `pip install .` (provides `wlb`), or symlink `ln -sf $(pwd)/wlb /usr/local/bin/wlb`.
-
 ### Run output
 
 Everything lands in `results/<timestamp>/`:
@@ -201,7 +197,6 @@ Everything lands in `results/<timestamp>/`:
 | `results.json` | structured results of all tasks (incrementally dumped — a crashed run keeps its data) |
 | `summary.md` | overview table: programmatic scores; essay/svg marked "pending human review" with artifact paths |
 | `artifacts/` | individual artifacts: essays `*.md`, drawings `*.svg` + `*.png` |
-| `config.snapshot.json` | run-configuration snapshot (key masked) |
 
 `review.pdf` is generated automatically at the end of every run; `wlb --report results/<timestamp>/` regenerates both files anytime.
 
@@ -211,13 +206,13 @@ Everything lands in `results/<timestamp>/`:
 2. Grade each scored section against the RUBIC (Intellectual Content 25 / Organization 25 / Language Use 50, A–F bands, deductions), fill in the boxes.
 3. If you prefer raw files, the individual artifacts stay in `artifacts/` (`*.md` essays, `*.svg`/`*.png` drawings).
 
-### Benchmark platform (default upload + share links)
+### Benchmark platform (share links)
 
 Every run is published to your own **WL-Benchmark platform** — a one-time-deployed
 Cloudflare Worker (`site/`, KV storage, no build step). The flow:
 
-1. `wlb run` finishes → builds one self-contained page for the run (images inlined);
-2. `POST <site>/api/runs` uploads it (Bearer token);
+1. `wlb` finishes → it asks "Upload results now? [Y/n]" (nothing is sent automatically);
+2. on confirmation it builds one self-contained page (images inlined) and `POST <site>/api/runs` uploads it (Bearer token);
 3. the share link `https://benchmark.wulei.org/r/<run-id>` is printed — send it to anyone;
 4. the local run directory is **deleted** (the platform is the single source of truth).
 
@@ -237,8 +232,7 @@ wl_benchmark/tasks_data/
 ├── essay/
 │   ├── 01-storytelling/  task.md + rubric.png|md + spec.json (constraints)
 │   ├── 02-argument/      task.md + rubric.png|md + spec.json (constraints)
-│   ├── 03-proposal/      task.md + rubric.png|md + spec.json (context_from + constraints)
-│   └── _source/          RUBIC1.docx (school original) + generated sheets
+│   └── 03-proposal/      task.md + rubric.png|md + spec.json (context_from + constraints)
 ├── quant/                                # fe-mining-01.json (generated by tools/gen_quant.py)
 ├── svg/                                  # stage1-riding / stage2-relation / stage3-architecture
 └── scheduling/term-plan-2627t1.json      # generated by tools/gen_scheduling.py
@@ -248,12 +242,12 @@ Directory numeric prefixes define execution order (chained tasks read the output
 
 ## Adding new tasks
 
-- New tool scenario: drop a JSON into `tool_use/named/` or `tool_use/unlabeled/`
 - New scheduling instance: `python3 tools/gen_scheduling.py --seed <n>`
+- New quant instance: `python3 tools/gen_quant.py --seed <n>`
 - New essay task: create `essay/<NN-name>/` with `task.md` + `rubric.*`; add `spec.json` with `context_from` for chained tasks
 - New SVG task: add a JSON under `svg/`, choosing the `stage` mode
 
 ## Roadmap
 
 - [ ] Human Evaluation (A/B test system): after a model passes the automated tests, route it to a real-environment A/B system and collect user feedback with tools that cannot affect important messages. (not finished yet)
-- [ ] Publish to PyPI / Homebrew.
+- [x] Publish to PyPI / Homebrew (auto-release on `vX.Y.Z` tags).
