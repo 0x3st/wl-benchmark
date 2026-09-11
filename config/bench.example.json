@@ -10,6 +10,7 @@
     "temperature": 0.2,
     "timeout": 300,
     "quant_max_turns": 16,
-    "quant_max_tokens": 8192
+    "quant_max_tokens": 8192,
+    "parallel_jobs": 3
   }
 }

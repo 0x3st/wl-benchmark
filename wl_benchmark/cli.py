@@ -99,6 +99,8 @@ def _load_run_cfg(path: str) -> dict:
 def cmd_run(args) -> None:
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(args.config)
+    if args.jobs is not None:
+        run_cfg["parallel_jobs"] = args.jobs
     out_dir = run_all(provider, run_cfg,
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
@@ -217,6 +219,8 @@ def main(argv=None) -> None:
     r.add_argument("--model", help="skip prompt: model name")
     r.add_argument("--tasks", help=f"comma list of {TASK_TYPES}")
     r.add_argument("--out", default="results")
+    r.add_argument("--jobs", type=int, default=None, metavar="N",
+                   help="parallel task workers (default 3; 1 = sequential)")
     r.add_argument("--no-upload", action="store_true",
                    help="do not upload to the benchmark site")
     r.add_argument("--keep", action="store_true",

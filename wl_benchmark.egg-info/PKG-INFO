@@ -1,3 +1,25 @@
+Metadata-Version: 2.4
+Name: wl-benchmark
+Version: 0.4.0
+Summary: WL-Benchmark: the AI benchmark of CUHK Shenzhen — tool use, RUBRIC essays, scheduling, SVG
+Author: WL
+License: MIT
+Keywords: llm,benchmark,evaluation,function-calling,agents
+Classifier: Development Status :: 4 - Beta
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+
 # WL-Benchmark
 
 **The New AI Benchmark for General Tasks.**
@@ -118,31 +140,6 @@ The proposal must carry full method rigor: sampling frame and target N, operatio
 
 The output should be in markdown format, in both English and Chinese (中英双语): English 1100-1600 words, Chinese 1700-2600 characters.
 
-## Installation
-
-Pick any one of the three channels:
-
-```bash
-# PyPI (recommended)
-pip install wl-benchmark          # or: pipx install wl-benchmark
-
-# Homebrew (macOS / Linux)
-brew tap 0x3st/tap https://github.com/0x3st/homebrew-tap
-brew install wlb
-
-# From source
-pip install .
-# or run directly from a checkout, no install:
-./wlb --help
-```
-
-The package is Python >= 3.9 with **zero third-party dependencies**
-(stdlib only). All three channels expose the same command: `wlb`.
-
-New releases are cut automatically by CI — push a tag `vX.Y.Z` and it
-publishes to PyPI, creates the GitHub Release and updates the Homebrew
-tap in one go.
-
 ## Usage
 
 The tool is self-contained (Python standard library only, no third-party dependencies). It is a pure instrument: **no provider presets are stored** — every run interactively asks for the target under test.
@@ -163,12 +160,6 @@ The tool is self-contained (Python standard library only, no third-party depende
 # Non-interactive (script-friendly), optionally restricted to some domains
 ./wlb run --endpoint https://api.example.com/v1 --key sk-xxx --model model-a \
     --tasks essay,svg
-
-# Parallelism: independent tasks run concurrently (default 3 workers);
-# chained tasks (the research proposal reads the two earlier writings)
-# still wait for their dependencies. --jobs 1 = strictly sequential.
-./wlb run --jobs 6     # more workers
-./wlb run --jobs 1     # sequential
 
 # Keep the local run data instead of deleting it after upload
 ./wlb run --keep
