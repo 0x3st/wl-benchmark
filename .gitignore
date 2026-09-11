@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 config/cf.json
 config/site.json
+site/.wrangler/
