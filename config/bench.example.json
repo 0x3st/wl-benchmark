@@ -1,0 +1,15 @@
+{
+  "_comment": "Optional run-parameter overrides. Provider info is NOT stored here - ./wlb run asks for endpoint/key/model interactively every time.",
+  "tasks_data_root": "tasks_data",
+  "run": {
+    "rubric_modality": "auto",
+    "max_tokens": 2048,
+    "essay_max_tokens": 4096,
+    "svg_max_tokens": 16384,
+    "scheduling_max_tokens": 4096,
+    "temperature": 0.2,
+    "timeout": 300,
+    "quant_max_turns": 16,
+    "quant_max_tokens": 8192
+  }
+}

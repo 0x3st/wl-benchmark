@@ -1,0 +1,20 @@
+# WL-Benchmark platform — Cloudflare Worker + KV.
+# One-time deploy; the local CLI then only needs the site URL + upload token.
+name = "wl-benchmark"
+main = "src/worker.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "RUNS"
+# create with:  npx wrangler kv namespace create RUNS
+# then paste the returned id here:
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Public link to this repository's README (shown in the site footer):
+DOCS_URL = "https://github.com/0x3st/wl-benchmark#readme"
+
+# Custom domain (requires the zone, e.g. wulei.org, in the same account):
+# routes = [
+#   { pattern = "benchmark.wulei.org", custom_domain = true }
+# ]

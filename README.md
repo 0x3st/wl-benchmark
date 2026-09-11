@@ -1,0 +1,222 @@
+# WL-Benchmark
+
+**The New AI Benchmark for General Tasks.**
+
+A benchmark for CUHK Shenzhen with its unique context and background information, packaged as a self-contained CLI tool (`wlb`). However, it's not exclusive for a single university, since it could somehow tell the real ability of a model, regardless the background information (university).
+
+This benchmark cares about general agent tasks, not only coding capability. It will not evaluate the output, leaving the right to human.
+
+## What makes a good benchmark (for us)?
+
+A Benchmark shouldn't be easily obtained by AI manufacturers or service providers. In other words, AI companies don't have to specifically pre-train with our tests. Hence, our tests should not be general to cover every user nor every field. We only care about where we, as LGUers, will use AI to solve problems.
+
+Meanwhile, the test problems are narrowed down to the CUHKSZ context, which means every problem is made of CUHKSZ. This does not actually prevent pre-train cheats. It would be even better if they could have a domain-specific pre-train towards CUHKSZ.
+
+As a benchmark in a "NewAPI/Sub2API/CliProxyAPI" era, we do not put too much weight on API testers like hvoy, since such providers may have special techniques to game potential problems. But we keep the possibility of using them as a reference.
+
+## How scoring works
+
+- **Programmatic scoring** (no model judge): tool use (count of correct operations) and scheduling (constraint solving).
+- **Human review**: essays (graded against the RUBIC) and SVG drawings (graded from the rendered PNG). The harness only generates the artifacts and saves them; a human opens them and scores.
+
+## Benchmark domains
+
+### Scheduling Problems
+
+The AI plays a Financial Engineering (Quantitative Finance stream) student planning the **2026-27 Term 1 registration**. It receives:
+
+1. a condensed **study scheme** (major requirements, university core, GE structure and rules, CEC rule, registration rules) — grounded in the official study scheme circular and the Registry pages 选课和改选 (/page/24: term load 9-18 units) and 通识教育 (/page/21: GE = foundations GFH+GFN + one course from each area A/B/C/D; GEW does not count toward the GE core),
+2. the **transcript through 2025-26 Term 2** (extracted from the official unofficial transcript; the 2026-27 in-progress rows are ignored — Term 1 has not been selected yet),
+3. the **course offering list** for 2026-27 Term 1 with fully randomized session times (15-min grid starts, mixed durations). Every offered section pairs one Lecture with one Tutorial session (2-3 sessions, optionally a Lab).
+
+This task also carries the **tool use and function calling** dimension: the four research tools are unlabeled (opaque names, no descriptions, terse parameter names — the model must infer what each does and how to use it, the same treatment once planned for a standalone tool-use domain), and the plan must be submitted through the documented `enroll` tool.
+
+The raw materials are NOT given in the prompt. The model must gather every fact itself through four pseudo tools — `search_registry` (rule documents), `query_transcript`, `query_prerequisite`, `search_course_offering` — and the search corpus contains noise: the OLD GE rule version (2017-22 admits: "GEW counts toward the GE core") next to the current one, the FinTech-stream study scheme next to the Quantitative Finance one, and the offering search hides the not-offered courses behind explicit "not offered" responses.
+
+After researching, the AI must audit its own remaining requirements and submit the plan through the only documented tool, `enroll` (batch or one call per course) — the opaque research tools stay undescribed, but the answer channel is explicit. The enroll tool accepts any well-formed submission blindly (no conflict/prereq validation feedback — otherwise a model could brute-force the unique solution through the SIS). A text-JSON fallback exists for models that never call `enroll`. The plan:
+
+- retake the two withdrawn (W) courses — ECO3121 and MAT3007;
+
+- retake the two withdrawn (W) courses — ECO3121 and MAT3007;
+- take every offered major-required course whose prerequisites are completed — and exclude the **prerequisite trap** FIN4120 (its prereq FIN3080 is only in progress);
+- complete the last GE foundation course **GFH1000** (与人文对话);
+- take the remaining CEC course **CEC4000** (GEW-type: it does not count toward the GE core or the 2-GE-per-term limit);
+- add exactly one GE-area course (area B/C/D still remaining — decoy area courses conflict with everything);
+- fit the **full 18-unit load** with zero time conflicts.
+
+The instance is constructed plant-then-noise with a fixed seed: the unique solution is planted first (pairwise non-overlapping sessions), then noise sections are added that deliberately overlap planted sessions — so **exactly one valid plan exists** (verified by a solver at generation time). Two more binding constraints raise the difficulty: the timetable must leave **Friday completely free** (a same-feasibility decoy area course sits entirely on Friday — dropping this rule yields 3 valid plans instead of 1, verified at generation time), and the GE-area course must be chosen under that rule. Scores are computed programmatically as ten weighted rule checks: required coverage (0.15), prerequisite-trap avoidance (0.10), no unknown/extra courses (0.10), GE foundation (0.10), CEC4000 (0.15), GE-area course (0.10), GE per-term limit (0.05), zero conflicts (0.10), exact 18-unit load (0.10), Friday-free timetable (0.05).
+
+### Quantitative Research Practice (multi-factor mining, inference, out-of-sample test)
+
+A math-heavy **agentic research task**, scored 80% programmatically + 20% by human review of the written note. No data is given in the prompt: the model must discover the data universe through two opaque tools (`meta_list`, `series_fetch`) — the universe contains 10 series including a revised-index decoy (SZTECH_V2), a BTC distraction, and a five-candidate factor library (MOM / VAL / SIZE / VOL / LIQ) where three factors are pure noise.
+
+The true driver of SZTECH (estimation window 2024, 12 observations) is the market plus **exactly two** library factors (MOM + VAL) — verified at generation time (t(MOM) = 15.2, t(VAL) = 6.1, every noise factor |t| < 1.5 when appended to the true model, corr(MOM, VAL) = 0.10, seeded by rejection sampling). The model must:
+
+- slice the 2024 window out of the 24-month histories (the fetch returns everything — window-slicing noise);
+- mine the factor library as a **subset-selection** problem: screen candidates, keep the two real factors, exclude decoys;
+- estimate the four-unknown OLS **by hand** (const + MKT + MOM + VAL — 4x4 normal equations) for alpha, the three betas and R-squared;
+- compute the **t-statistics of both factor betas** — this requires the (X'X)^-1 diagonal and the residual variance, i.e. formal inference, not just point estimates;
+- compute the annualized Sharpe (RF series), sample standard deviation, maximum drawdown, and the 3-worst-observation expected shortfall;
+- pass the **out-of-sample test**: apply the 2024 coefficients to each 2025 month (the second year of history is no longer dead weight) and report the RMSE of the prediction errors;
+- write a 200-450-word research note (mining method, identification evidence, out-of-sample performance, limitation) — human-reviewed.
+
+Numeric answers are checked with per-question tolerances against an answer key computed programmatically (4x4 normal equations, matrix inverse, compounding, drawdown); percent/decimal-fraction scale confusion is tolerated. Final score = 80% x auto + 20% x note. A wrong factor subset (missing one true factor or keeping a decoy) immediately drops 12 points of auto weight, and the beta/t-stat answers become unanswerable correctly — factor identification is the gate.
+
+### SVG Drawing
+
+All three stages carry **machine-checked structural constraints** on the SVG reply: root `<svg>` with BOTH viewBox and explicit width/height, minimum labeled-text counts (5 / 6 / 8 per stage), font-size >= 14 everywhere, explicit arrowheads (marker or triangle) for relation/architecture stages, the picked subjects must appear as labels, and a legend/caption box must exist. Results are printed as a PASS/FAIL table in the review PDF (suggested -5 per violation, reviewer confirms). The prompts additionally demand scene composition requirements per stage (environmental props with labels + caption for riding; >= 3 intermediate dated hops for relation; >= 8 components + legend + grouping boundary for architecture).
+
+#### Stage One
+
+We have a bunch of nouns A and B. For Set A, there are some words referring to an animal/person, e.g. Xu Yangsheng (President) or Qin Shi Huang. For Set B, there are some words referring to a physical and biological non-animal, e.g. iPhone or Teaching Building.
+
+The benchmark randomly selects one word from A and one word from B, and asks the model to draw an SVG of A riding B, e.g. President Xu riding GPA.
+
+Set A includes: Xu Yangsheng (President), The First Emperor of Qin (Qin Shi Huang), Confucius, Qu Yuan (屈原), Zheng He (郑和), Zhang Heng (张衡)
+
+Set B includes: iPhone, Fridge, Rocket, Wi-Fi, GPA, Bicycle, Cybertruck, Drone, WeChat
+
+The benchmark does this once and moves on.
+
+#### Stage Two
+
+The benchmark selects two random persons in A, and lets the AI draw a COMPLETE illustration of how these two persons are indirectly related.
+
+The AI is asked once. The output is still an SVG file.
+
+#### Stage Three
+
+The benchmark selects a random item in B, and lets the AI draw an architecture diagram.
+
+The AI is asked once. The output is still an SVG file.
+
+### Essay Writing with RUBRIC
+
+RUBICs for the three writing tests are adapted from the school-provided RUBIC1.docx (same dimensions, weights, level bands and deduction rules); the original sheet is kept at `wl_benchmark/tasks_data/essay/_source/RUBIC1.docx`. The rubric is provided to the model as a photo (multimodal) by default; text/PDF modes are switchable.
+
+Every writing task now carries **machine-checked hard constraints** on top of the rubric quality dimensions: language-section headings, English word-range and Chinese character-range windows, required scene/section headings, typed evidence tags, boundary conditions, method-rigor keywords. The harness verifies each constraint programmatically and the result table is printed in the review PDF (suggested -5 per violated constraint, reviewer confirms).
+
+#### Story Telling
+
+The benchmark asks the AI to write a story about Qin Shi Huang riding a Polar Bear and looking at his phone — in **exactly three scenes** (parallel `### Scene N —` / `### 场景 N —` headings), where the phone must create the conflict once and resolve it once, and every modern object needs an in-world explanation.
+
+The output should be in markdown format, in both English and Chinese (中英双语): English 800-1200 words, Chinese 1200-2000 characters.
+
+#### Argument Writing
+
+The benchmark asks the AI to write an argument essay about why we could use smartphones while walking inside the campus.
+
+The AI must provide **at least four typed evidences** (`**[Statistic]**`, `**[Campus observation]**`, `**[Analogy]**`, `**[Authority]**`, `**[Counterfactual]**` — at least three distinct types), a rebuttal of "走路不看手机" that states the strongest opposing version **and concedes one point** before refuting, and a boundary-conditions paragraph naming where the position does NOT hold.
+
+The output should be in markdown format, in both English and Chinese (中英双语): English 900-1300 words, Chinese 1400-2200 characters.
+
+#### Research Proposal Writing
+
+The benchmark transfers the results of the previous two writings as context, and asks the AI to design research towards the topic: whether we could use smartphones while walking inside the campus.
+
+The proposal must carry full method rigor: sampling frame and target N, operationalized IV/DV, instrument, identification strategy, a pre-registered falsifiable **H1**, at least three expected outcomes each paired with its refuting observation, the story cited as motivation plus at least two Task-2 claims converted into hypotheses tagged `[from Task 2]`, and two validity threats with mitigations.
+
+The output should be in markdown format, in both English and Chinese (中英双语): English 1100-1600 words, Chinese 1700-2600 characters.
+
+## Usage
+
+The tool is self-contained (Python standard library only, no third-party dependencies). It is a pure instrument: **no provider presets are stored** — every run interactively asks for the target under test.
+
+```bash
+# Connectivity check: asks for endpoint/key/model, verifies and exits
+./wlb doctor
+
+# List the discovered tasks
+./wlb list-tasks
+
+# Run the full suite: asks for endpoint -> API key (hidden) -> model
+# (after key input it fetches the endpoint's model list, so you can pick by number)
+# By default every finished run is uploaded to the benchmark platform
+# (share link printed, local run data then deleted)
+./wlb run
+
+# Non-interactive (script-friendly), optionally restricted to some domains
+./wlb run --endpoint https://api.example.com/v1 --key sk-xxx --model model-a \
+    --tasks essay,svg
+
+# Keep the local run data instead of deleting it after upload
+./wlb run --keep
+
+# Skip the platform entirely (results stay local)
+./wlb run --no-upload
+
+# Re-upload a run whose upload failed (kept locally in that case)
+./wlb publish results/<timestamp>
+
+# Rebuild the summary of a finished run
+./wlb report results/<timestamp>/
+```
+
+Install as a global command: `pip install .` (provides `wlb`), or symlink `ln -sf $(pwd)/wlb /usr/local/bin/wlb`.
+
+### Run output
+
+Everything lands in `results/<timestamp>/`:
+
+| File | Purpose |
+|---|---|
+| `review.pdf` | **one consolidated human-review PDF**: summary table + every task's full output (essays, rendered SVGs, scheduling details), each scored section has a blank scoring box |
+| `results.json` | structured results of all tasks (incrementally dumped — a crashed run keeps its data) |
+| `summary.md` | overview table: programmatic scores; essay/svg marked "pending human review" with artifact paths |
+| `artifacts/` | individual artifacts: essays `*.md`, drawings `*.svg` + `*.png` |
+| `config.snapshot.json` | run-configuration snapshot (key masked) |
+
+`review.pdf` is generated automatically at the end of every run; `./wlb report results/<timestamp>/` regenerates both files anytime.
+
+### Human review flow
+
+1. Open `results/<timestamp>/review.pdf` — everything is in there: the summary table, each essay with its RUBRIC, each rendered SVG, each scheduling detail, and a blank scoring box per task.
+2. Grade each scored section against the RUBIC (Intellectual Content 25 / Organization 25 / Language Use 50, A–F bands, deductions), fill in the boxes.
+3. If you prefer raw files, the individual artifacts stay in `artifacts/` (`*.md` essays, `*.svg`/`*.png` drawings).
+
+### Benchmark platform (default upload + share links)
+
+Every run is published to your own **WL-Benchmark platform** — a one-time-deployed
+Cloudflare Worker (`site/`, KV storage, no build step). The flow:
+
+1. `wlb run` finishes → builds one self-contained page for the run (images inlined);
+2. `POST <site>/api/runs` uploads it (Bearer token);
+3. the share link `https://benchmark.wulei.org/r/<run-id>` is printed — send it to anyone;
+4. the local run directory is **deleted** (the platform is the single source of truth).
+
+The platform accumulates all runs at `/` (index) with `/r/<id>` detail pages.
+Setup: deploy `site/` once (see `site/README.md`), then either set
+`WL_BENCH_URL` + `WL_BENCH_TOKEN` or answer the interactive prompt on the first
+run (saved to `config/site.json`, gitignored).
+
+### Run parameters
+
+Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `max_tokens`, `essay_max_tokens`, `svg_max_tokens`, `scheduling_max_tokens`, `temperature`, `timeout`, `tasks_data_root`. Provider information is never stored there.
+
+## Task data layout
+
+```
+wl_benchmark/tasks_data/
+├── essay/
+│   ├── 01-storytelling/  task.md + rubric.png|md + spec.json (constraints)
+│   ├── 02-argument/      task.md + rubric.png|md + spec.json (constraints)
+│   ├── 03-proposal/      task.md + rubric.png|md + spec.json (context_from + constraints)
+│   └── _source/          RUBIC1.docx (school original) + generated sheets
+├── quant/                                # fe-mining-01.json (generated by tools/gen_quant.py)
+├── svg/                                  # stage1-riding / stage2-relation / stage3-architecture
+└── scheduling/term-plan-2627t1.json      # generated by tools/gen_scheduling.py
+```
+
+Directory numeric prefixes define execution order (chained tasks read the outputs of earlier ones).
+
+## Adding new tasks
+
+- New tool scenario: drop a JSON into `tool_use/named/` or `tool_use/unlabeled/`
+- New scheduling instance: `python3 tools/gen_scheduling.py --seed <n>`
+- New essay task: create `essay/<NN-name>/` with `task.md` + `rubric.*`; add `spec.json` with `context_from` for chained tasks
+- New SVG task: add a JSON under `svg/`, choosing the `stage` mode
+
+## Roadmap
+
+- [ ] Human Evaluation (A/B test system): after a model passes the automated tests, route it to a real-environment A/B system and collect user feedback with tools that cannot affect important messages. (not finished yet)
+- [ ] Publish to PyPI / Homebrew.

@@ -1,0 +1,7 @@
+results/
+config/bench.json
+__pycache__/
+*.pyc
+.DS_Store
+config/cf.json
+config/site.json

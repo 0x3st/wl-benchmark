@@ -1,0 +1,24 @@
+{
+  "id": "svg-stage1-riding",
+  "stage": "riding",
+  "seed": 20260910,
+  "set_a": [
+    "Xu Yangsheng (President)",
+    "The First Emperor of Qin (Qin Shi Huang)",
+    "Confucius",
+    "Qu Yuan (屈原)",
+    "Zheng He (郑和)",
+    "Zhang Heng (张衡)"
+  ],
+  "set_b": [
+    "iPhone",
+    "Fridge",
+    "Rocket",
+    "Wi-Fi",
+    "GPA",
+    "Bicycle",
+    "Cybertruck",
+    "Drone",
+    "WeChat"
+  ]
+}

@@ -1,0 +1,78 @@
+{
+ "context_from": [
+  "01-storytelling",
+  "02-argument"
+ ],
+ "constraints": [
+  {
+   "type": "sections_present",
+   "values": [
+    "## English",
+    "## 中文"
+   ],
+   "desc": "Both language sections present"
+  },
+  {
+   "type": "word_range",
+   "section": "## English",
+   "min": 1100,
+   "max": 1600,
+   "desc": "English 1100-1600 words"
+  },
+  {
+   "type": "char_range",
+   "section": "## 中文",
+   "min": 1700,
+   "max": 2600,
+   "script": "cjk",
+   "desc": "Chinese 1700-2600 characters"
+  },
+  {
+   "type": "min_distinct",
+   "patterns": [
+    "### Background",
+    "### Literature Review",
+    "### Research Method",
+    "### Expected Result",
+    "### Conclusion"
+   ],
+   "min": 5,
+   "desc": "All five English section headings"
+  },
+  {
+   "type": "min_distinct",
+   "patterns": [
+    "[from Task 2]"
+   ],
+   "min": 1,
+   "desc": "Claims carried over from Task 2 are tagged"
+  },
+  {
+   "type": "keyword_groups",
+   "groups": [
+    [
+     "H1"
+    ],
+    [
+     "sampling frame",
+     "sample size",
+     "target N"
+    ],
+    [
+     "independent variable",
+     "dependent variable"
+    ],
+    [
+     "threat to validity",
+     "threats to validity"
+    ],
+    [
+     "refute",
+     "falsif"
+    ]
+   ],
+   "min": 5,
+   "desc": "Method rigor: H1, sampling, IV/DV, validity threats, falsifiability"
+  }
+ ]
+}

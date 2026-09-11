@@ -1,0 +1,1143 @@
+{
+ "id": "quant-fe-mining-01",
+ "title": "FE research practice — multi-factor mining, inference and out-of-sample test",
+ "window": {
+  "start": "2024-01",
+  "end": "2024-12"
+ },
+ "oos_window": {
+  "start": "2025-01",
+  "end": "2025-12"
+ },
+ "series_meta": [
+  {
+   "tick": "SZTECH",
+   "desc": "Synthetic Tech Index v1, monthly returns (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "SZTECH_V2",
+   "desc": "Synthetic Tech Index v2 (revised methodology), monthly returns (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "MKT3000",
+   "desc": "Market benchmark index, monthly returns (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "RF",
+   "desc": "Risk-free rate, monthly (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "MOM",
+   "desc": "Style factor — momentum (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "VAL",
+   "desc": "Style factor — value (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "SIZE",
+   "desc": "Style factor — size (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "VOL",
+   "desc": "Style factor — volatility (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "LIQ",
+   "desc": "Style factor — liquidity (%). Covers 2024-01 to 2025-12."
+  },
+  {
+   "tick": "BTC",
+   "desc": "Bitcoin, monthly returns (%). Covers 2024-01 to 2025-12."
+  }
+ ],
+ "series": {
+  "MKT3000": [
+   {
+    "month": "2024-01",
+    "ret": 2.0
+   },
+   {
+    "month": "2024-02",
+    "ret": -1.0
+   },
+   {
+    "month": "2024-03",
+    "ret": 3.0
+   },
+   {
+    "month": "2024-04",
+    "ret": 1.0
+   },
+   {
+    "month": "2024-05",
+    "ret": -2.0
+   },
+   {
+    "month": "2024-06",
+    "ret": 4.0
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.0
+   },
+   {
+    "month": "2024-08",
+    "ret": -3.0
+   },
+   {
+    "month": "2024-09",
+    "ret": 2.0
+   },
+   {
+    "month": "2024-10",
+    "ret": 1.0
+   },
+   {
+    "month": "2024-11",
+    "ret": -1.0
+   },
+   {
+    "month": "2024-12",
+    "ret": 3.0
+   },
+   {
+    "month": "2025-01",
+    "ret": 1.0
+   },
+   {
+    "month": "2025-02",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-03",
+    "ret": -0.5
+   },
+   {
+    "month": "2025-04",
+    "ret": 2.0
+   },
+   {
+    "month": "2025-05",
+    "ret": 1.5
+   },
+   {
+    "month": "2025-06",
+    "ret": -1.0
+   },
+   {
+    "month": "2025-07",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-08",
+    "ret": 2.5
+   },
+   {
+    "month": "2025-09",
+    "ret": -2.0
+   },
+   {
+    "month": "2025-10",
+    "ret": 1.0
+   },
+   {
+    "month": "2025-11",
+    "ret": 0.0
+   },
+   {
+    "month": "2025-12",
+    "ret": 2.0
+   }
+  ],
+  "RF": [
+   {
+    "month": "2024-01",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-02",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-03",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-04",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-05",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-06",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-08",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-09",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-10",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-11",
+    "ret": 0.15
+   },
+   {
+    "month": "2024-12",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-01",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-02",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-03",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-04",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-05",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-06",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-07",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-08",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-09",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-10",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-11",
+    "ret": 0.15
+   },
+   {
+    "month": "2025-12",
+    "ret": 0.15
+   }
+  ],
+  "MOM": [
+   {
+    "month": "2024-01",
+    "ret": 1.2
+   },
+   {
+    "month": "2024-02",
+    "ret": -0.8
+   },
+   {
+    "month": "2024-03",
+    "ret": 1.5
+   },
+   {
+    "month": "2024-04",
+    "ret": -1.0
+   },
+   {
+    "month": "2024-05",
+    "ret": 0.9
+   },
+   {
+    "month": "2024-06",
+    "ret": -1.2
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.8
+   },
+   {
+    "month": "2024-08",
+    "ret": -0.9
+   },
+   {
+    "month": "2024-09",
+    "ret": 1.1
+   },
+   {
+    "month": "2024-10",
+    "ret": -0.7
+   },
+   {
+    "month": "2024-11",
+    "ret": 1.3
+   },
+   {
+    "month": "2024-12",
+    "ret": -0.6
+   },
+   {
+    "month": "2025-01",
+    "ret": 0.7
+   },
+   {
+    "month": "2025-02",
+    "ret": -1.1
+   },
+   {
+    "month": "2025-03",
+    "ret": 0.9
+   },
+   {
+    "month": "2025-04",
+    "ret": -0.8
+   },
+   {
+    "month": "2025-05",
+    "ret": 1.0
+   },
+   {
+    "month": "2025-06",
+    "ret": -0.9
+   },
+   {
+    "month": "2025-07",
+    "ret": 1.2
+   },
+   {
+    "month": "2025-08",
+    "ret": -0.7
+   },
+   {
+    "month": "2025-09",
+    "ret": 0.8
+   },
+   {
+    "month": "2025-10",
+    "ret": -1.0
+   },
+   {
+    "month": "2025-11",
+    "ret": 1.1
+   },
+   {
+    "month": "2025-12",
+    "ret": -0.8
+   }
+  ],
+  "VAL": [
+   {
+    "month": "2024-01",
+    "ret": 0.6
+   },
+   {
+    "month": "2024-02",
+    "ret": 1.0
+   },
+   {
+    "month": "2024-03",
+    "ret": 0.4
+   },
+   {
+    "month": "2024-04",
+    "ret": -0.6
+   },
+   {
+    "month": "2024-05",
+    "ret": -0.4
+   },
+   {
+    "month": "2024-06",
+    "ret": -0.2
+   },
+   {
+    "month": "2024-07",
+    "ret": -0.4
+   },
+   {
+    "month": "2024-08",
+    "ret": -1.0
+   },
+   {
+    "month": "2024-09",
+    "ret": 0.8
+   },
+   {
+    "month": "2024-10",
+    "ret": 0.6
+   },
+   {
+    "month": "2024-11",
+    "ret": -1.0
+   },
+   {
+    "month": "2024-12",
+    "ret": 0.0
+   },
+   {
+    "month": "2025-01",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-02",
+    "ret": -0.8
+   },
+   {
+    "month": "2025-03",
+    "ret": 0.7
+   },
+   {
+    "month": "2025-04",
+    "ret": -0.5
+   },
+   {
+    "month": "2025-05",
+    "ret": 0.9
+   },
+   {
+    "month": "2025-06",
+    "ret": -0.6
+   },
+   {
+    "month": "2025-07",
+    "ret": 0.3
+   },
+   {
+    "month": "2025-08",
+    "ret": 0.8
+   },
+   {
+    "month": "2025-09",
+    "ret": -0.7
+   },
+   {
+    "month": "2025-10",
+    "ret": 0.6
+   },
+   {
+    "month": "2025-11",
+    "ret": -0.4
+   },
+   {
+    "month": "2025-12",
+    "ret": 0.5
+   }
+  ],
+  "SZTECH": [
+   {
+    "month": "2024-01",
+    "ret": 4.48
+   },
+   {
+    "month": "2024-02",
+    "ret": -0.96
+   },
+   {
+    "month": "2024-03",
+    "ret": 5.86
+   },
+   {
+    "month": "2024-04",
+    "ret": -0.84
+   },
+   {
+    "month": "2024-05",
+    "ret": -0.78
+   },
+   {
+    "month": "2024-06",
+    "ret": 2.48
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.9
+   },
+   {
+    "month": "2024-08",
+    "ret": -4.28
+   },
+   {
+    "month": "2024-09",
+    "ret": 3.94
+   },
+   {
+    "month": "2024-10",
+    "ret": 1.2
+   },
+   {
+    "month": "2024-11",
+    "ret": -0.04
+   },
+   {
+    "month": "2024-12",
+    "ret": 2.38
+   },
+   {
+    "month": "2025-01",
+    "ret": 2.29
+   },
+   {
+    "month": "2025-02",
+    "ret": -0.74
+   },
+   {
+    "month": "2025-03",
+    "ret": 1.71
+   },
+   {
+    "month": "2025-04",
+    "ret": 0.39
+   },
+   {
+    "month": "2025-05",
+    "ret": 4.21
+   },
+   {
+    "month": "2025-06",
+    "ret": -2.52
+   },
+   {
+    "month": "2025-07",
+    "ret": 2.81
+   },
+   {
+    "month": "2025-08",
+    "ret": 2.28
+   },
+   {
+    "month": "2025-09",
+    "ret": -1.27
+   },
+   {
+    "month": "2025-10",
+    "ret": 0.84
+   },
+   {
+    "month": "2025-11",
+    "ret": 0.96
+   },
+   {
+    "month": "2025-12",
+    "ret": 1.79
+   }
+  ],
+  "SZTECH_V2": [
+   {
+    "month": "2024-01",
+    "ret": 4.58
+   },
+   {
+    "month": "2024-02",
+    "ret": -0.86
+   },
+   {
+    "month": "2024-03",
+    "ret": 5.96
+   },
+   {
+    "month": "2024-04",
+    "ret": -0.74
+   },
+   {
+    "month": "2024-05",
+    "ret": -0.68
+   },
+   {
+    "month": "2024-06",
+    "ret": 2.58
+   },
+   {
+    "month": "2024-07",
+    "ret": 1.0
+   },
+   {
+    "month": "2024-08",
+    "ret": -4.18
+   },
+   {
+    "month": "2024-09",
+    "ret": 4.04
+   },
+   {
+    "month": "2024-10",
+    "ret": 1.3
+   },
+   {
+    "month": "2024-11",
+    "ret": 0.06
+   },
+   {
+    "month": "2024-12",
+    "ret": 2.48
+   },
+   {
+    "month": "2025-01",
+    "ret": 2.39
+   },
+   {
+    "month": "2025-02",
+    "ret": -0.64
+   },
+   {
+    "month": "2025-03",
+    "ret": 1.81
+   },
+   {
+    "month": "2025-04",
+    "ret": 0.49
+   },
+   {
+    "month": "2025-05",
+    "ret": 4.31
+   },
+   {
+    "month": "2025-06",
+    "ret": -2.42
+   },
+   {
+    "month": "2025-07",
+    "ret": 2.91
+   },
+   {
+    "month": "2025-08",
+    "ret": 2.38
+   },
+   {
+    "month": "2025-09",
+    "ret": -1.17
+   },
+   {
+    "month": "2025-10",
+    "ret": 0.94
+   },
+   {
+    "month": "2025-11",
+    "ret": 1.06
+   },
+   {
+    "month": "2025-12",
+    "ret": 1.89
+   }
+  ],
+  "SIZE": [
+   {
+    "month": "2024-01",
+    "ret": -0.7
+   },
+   {
+    "month": "2024-02",
+    "ret": 2.57
+   },
+   {
+    "month": "2024-03",
+    "ret": 0.13
+   },
+   {
+    "month": "2024-04",
+    "ret": -1.12
+   },
+   {
+    "month": "2024-05",
+    "ret": -0.13
+   },
+   {
+    "month": "2024-06",
+    "ret": -1.73
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.51
+   },
+   {
+    "month": "2024-08",
+    "ret": 1.54
+   },
+   {
+    "month": "2024-09",
+    "ret": 0.78
+   },
+   {
+    "month": "2024-10",
+    "ret": -0.85
+   },
+   {
+    "month": "2024-11",
+    "ret": 1.09
+   },
+   {
+    "month": "2024-12",
+    "ret": 0.57
+   },
+   {
+    "month": "2025-01",
+    "ret": -1.3
+   },
+   {
+    "month": "2025-02",
+    "ret": -0.01
+   },
+   {
+    "month": "2025-03",
+    "ret": -1.36
+   },
+   {
+    "month": "2025-04",
+    "ret": -0.8
+   },
+   {
+    "month": "2025-05",
+    "ret": -0.18
+   },
+   {
+    "month": "2025-06",
+    "ret": 1.11
+   },
+   {
+    "month": "2025-07",
+    "ret": 1.63
+   },
+   {
+    "month": "2025-08",
+    "ret": 0.31
+   },
+   {
+    "month": "2025-09",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-10",
+    "ret": 1.07
+   },
+   {
+    "month": "2025-11",
+    "ret": 0.3
+   },
+   {
+    "month": "2025-12",
+    "ret": -0.34
+   }
+  ],
+  "VOL": [
+   {
+    "month": "2024-01",
+    "ret": -0.74
+   },
+   {
+    "month": "2024-02",
+    "ret": -0.21
+   },
+   {
+    "month": "2024-03",
+    "ret": -2.67
+   },
+   {
+    "month": "2024-04",
+    "ret": -1.3
+   },
+   {
+    "month": "2024-05",
+    "ret": 0.87
+   },
+   {
+    "month": "2024-06",
+    "ret": 1.54
+   },
+   {
+    "month": "2024-07",
+    "ret": 0.49
+   },
+   {
+    "month": "2024-08",
+    "ret": -1.76
+   },
+   {
+    "month": "2024-09",
+    "ret": -0.68
+   },
+   {
+    "month": "2024-10",
+    "ret": 0.06
+   },
+   {
+    "month": "2024-11",
+    "ret": -1.06
+   },
+   {
+    "month": "2024-12",
+    "ret": 1.02
+   },
+   {
+    "month": "2025-01",
+    "ret": -0.92
+   },
+   {
+    "month": "2025-02",
+    "ret": -0.33
+   },
+   {
+    "month": "2025-03",
+    "ret": -0.18
+   },
+   {
+    "month": "2025-04",
+    "ret": 0.26
+   },
+   {
+    "month": "2025-05",
+    "ret": -2.01
+   },
+   {
+    "month": "2025-06",
+    "ret": 0.0
+   },
+   {
+    "month": "2025-07",
+    "ret": -1.1
+   },
+   {
+    "month": "2025-08",
+    "ret": 0.78
+   },
+   {
+    "month": "2025-09",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-10",
+    "ret": -0.15
+   },
+   {
+    "month": "2025-11",
+    "ret": 0.01
+   },
+   {
+    "month": "2025-12",
+    "ret": -0.87
+   }
+  ],
+  "LIQ": [
+   {
+    "month": "2024-01",
+    "ret": -0.18
+   },
+   {
+    "month": "2024-02",
+    "ret": -0.72
+   },
+   {
+    "month": "2024-03",
+    "ret": 0.16
+   },
+   {
+    "month": "2024-04",
+    "ret": 0.81
+   },
+   {
+    "month": "2024-05",
+    "ret": -1.07
+   },
+   {
+    "month": "2024-06",
+    "ret": 1.3
+   },
+   {
+    "month": "2024-07",
+    "ret": -0.8
+   },
+   {
+    "month": "2024-08",
+    "ret": 0.6
+   },
+   {
+    "month": "2024-09",
+    "ret": 1.12
+   },
+   {
+    "month": "2024-10",
+    "ret": 1.57
+   },
+   {
+    "month": "2024-11",
+    "ret": 0.59
+   },
+   {
+    "month": "2024-12",
+    "ret": -0.49
+   },
+   {
+    "month": "2025-01",
+    "ret": 0.17
+   },
+   {
+    "month": "2025-02",
+    "ret": 0.19
+   },
+   {
+    "month": "2025-03",
+    "ret": 1.18
+   },
+   {
+    "month": "2025-04",
+    "ret": 1.74
+   },
+   {
+    "month": "2025-05",
+    "ret": -0.9
+   },
+   {
+    "month": "2025-06",
+    "ret": -0.82
+   },
+   {
+    "month": "2025-07",
+    "ret": 0.68
+   },
+   {
+    "month": "2025-08",
+    "ret": -1.18
+   },
+   {
+    "month": "2025-09",
+    "ret": -0.26
+   },
+   {
+    "month": "2025-10",
+    "ret": -1.56
+   },
+   {
+    "month": "2025-11",
+    "ret": -0.72
+   },
+   {
+    "month": "2025-12",
+    "ret": 0.95
+   }
+  ],
+  "BTC": [
+   {
+    "month": "2024-01",
+    "ret": 2.68
+   },
+   {
+    "month": "2024-02",
+    "ret": 4.95
+   },
+   {
+    "month": "2024-03",
+    "ret": 2.19
+   },
+   {
+    "month": "2024-04",
+    "ret": 6.38
+   },
+   {
+    "month": "2024-05",
+    "ret": -14.23
+   },
+   {
+    "month": "2024-06",
+    "ret": 10.99
+   },
+   {
+    "month": "2024-07",
+    "ret": -3.48
+   },
+   {
+    "month": "2024-08",
+    "ret": -6.45
+   },
+   {
+    "month": "2024-09",
+    "ret": 7.37
+   },
+   {
+    "month": "2024-10",
+    "ret": 11.9
+   },
+   {
+    "month": "2024-11",
+    "ret": -7.55
+   },
+   {
+    "month": "2024-12",
+    "ret": 1.7
+   },
+   {
+    "month": "2025-01",
+    "ret": 4.12
+   },
+   {
+    "month": "2025-02",
+    "ret": 0.52
+   },
+   {
+    "month": "2025-03",
+    "ret": -6.69
+   },
+   {
+    "month": "2025-04",
+    "ret": -1.35
+   },
+   {
+    "month": "2025-05",
+    "ret": -8.33
+   },
+   {
+    "month": "2025-06",
+    "ret": -12.2
+   },
+   {
+    "month": "2025-07",
+    "ret": 1.43
+   },
+   {
+    "month": "2025-08",
+    "ret": 0.5
+   },
+   {
+    "month": "2025-09",
+    "ret": -9.24
+   },
+   {
+    "month": "2025-10",
+    "ret": -4.48
+   },
+   {
+    "month": "2025-11",
+    "ret": -7.58
+   },
+   {
+    "month": "2025-12",
+    "ret": 15.68
+   }
+  ]
+ },
+ "questions": [
+  {
+   "id": "factor_ids",
+   "weight": 0.12,
+   "prompt": "Which library factors enter the true model of SZTECH (besides the market)? Answer as a JSON list of tickers, e.g. [\"MOM\", \"VAL\"].",
+   "answer": [
+    "MOM",
+    "VAL"
+   ]
+  },
+  {
+   "id": "alpha",
+   "weight": 0.08,
+   "prompt": "Regression of SZTECH on [const, MKT3000, your factors]: alpha (monthly, percent).",
+   "answer": 0.31855,
+   "tol": 0.06
+  },
+  {
+   "id": "beta_mkt",
+   "weight": 0.08,
+   "prompt": "Same regression: beta on MKT3000.",
+   "answer": 0.960493,
+   "tol": 0.04
+  },
+  {
+   "id": "beta_mom",
+   "weight": 0.08,
+   "prompt": "Same regression: beta on the momentum-type factor you selected.",
+   "answer": 1.280734,
+   "tol": 0.04
+  },
+  {
+   "id": "beta_val",
+   "weight": 0.08,
+   "prompt": "Same regression: beta on the other factor you selected.",
+   "answer": 0.881015,
+   "tol": 0.04
+  },
+  {
+   "id": "t_mom",
+   "weight": 0.08,
+   "prompt": "t-statistic of the momentum-type factor beta in that regression.",
+   "answer": 15.196,
+   "tol": 0.6
+  },
+  {
+   "id": "t_val",
+   "weight": 0.08,
+   "prompt": "t-statistic of the other factor beta in that regression.",
+   "answer": 6.085,
+   "tol": 0.6
+  },
+  {
+   "id": "r2",
+   "weight": 0.05,
+   "prompt": "R-squared of that regression (0 to 1).",
+   "answer": 0.991921,
+   "tol": 0.02
+  },
+  {
+   "id": "std_stk",
+   "weight": 0.05,
+   "prompt": "Sample standard deviation of the SZTECH returns in the window (n-1), in percent.",
+   "answer": 2.819054,
+   "tol": 0.02
+  },
+  {
+   "id": "sharpe_ann",
+   "weight": 0.08,
+   "prompt": "Annualized Sharpe ratio of SZTECH in the window: (mean SZTECH - mean RF) / sample std x sqrt(12).",
+   "answer": 1.284114,
+   "tol": 0.06
+  },
+  {
+   "id": "max_dd",
+   "weight": 0.05,
+   "prompt": "Maximum drawdown of the compounded SZTECH price series in the window, in percent (positive number).",
+   "answer": 4.28,
+   "tol": 0.5
+  },
+  {
+   "id": "es3",
+   "weight": 0.05,
+   "prompt": "Mean of the three worst SZTECH monthly returns in the window, in percent.",
+   "answer": -2.026667,
+   "tol": 0.06
+  },
+  {
+   "id": "oos_rmse",
+   "weight": 0.12,
+   "prompt": "OUT-OF-SAMPLE test: keep the coefficients estimated on the 2024 window, predict every 2025 month of SZTECH from that month's regressors, and report the RMSE of the prediction errors (in percentage points).",
+   "answer": 0.312991,
+   "tol": 0.08
+  }
+ ],
+ "note_spec": {
+  "min_words": 200,
+  "max_words": 450,
+  "weight": 0.2,
+  "must_cover": [
+   "factor mining and model selection",
+   "identification evidence (t-stats)",
+   "out-of-sample performance",
+   "limitations"
+  ]
+ },
+ "auto_weight": 0.8
+}

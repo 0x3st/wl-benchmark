@@ -1,0 +1,64 @@
+{
+ "constraints": [
+  {
+   "type": "sections_present",
+   "values": [
+    "## English",
+    "## 中文"
+   ],
+   "desc": "Both language sections present"
+  },
+  {
+   "type": "word_range",
+   "section": "## English",
+   "min": 900,
+   "max": 1300,
+   "desc": "English 900-1300 words"
+  },
+  {
+   "type": "char_range",
+   "section": "## 中文",
+   "min": 1400,
+   "max": 2200,
+   "script": "cjk",
+   "desc": "Chinese 1400-2200 characters"
+  },
+  {
+   "type": "min_distinct",
+   "patterns": [
+    "[Statistic]",
+    "[Campus observation]",
+    "[Analogy]",
+    "[Authority]",
+    "[Counterfactual]"
+   ],
+   "min": 3,
+   "desc": "At least 3 distinct evidence-type tags"
+  },
+  {
+   "type": "keyword_groups",
+   "groups": [
+    [
+     "走路不看手机"
+    ],
+    [
+     "rebuttal",
+     "counterargument",
+     "opposing"
+    ],
+    [
+     "concede",
+     "concession",
+     "grant that"
+    ],
+    [
+     "boundary condition",
+     "does not hold",
+     "exception"
+    ]
+   ],
+   "min": 4,
+   "desc": "Rebuttal of the slogan, concession, boundary conditions"
+  }
+ ]
+}

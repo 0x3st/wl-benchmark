@@ -1,0 +1,47 @@
+{
+ "constraints": [
+  {
+   "type": "sections_present",
+   "values": [
+    "## English",
+    "## 中文"
+   ],
+   "desc": "Both language sections present"
+  },
+  {
+   "type": "word_range",
+   "section": "## English",
+   "min": 800,
+   "max": 1200,
+   "desc": "English 800-1200 words"
+  },
+  {
+   "type": "char_range",
+   "section": "## 中文",
+   "min": 1200,
+   "max": 2000,
+   "script": "cjk",
+   "desc": "Chinese 1200-2000 characters"
+  },
+  {
+   "type": "min_distinct",
+   "patterns": [
+    "### Scene 1",
+    "### Scene 2",
+    "### Scene 3"
+   ],
+   "min": 3,
+   "desc": "Exactly three English scene headings"
+  },
+  {
+   "type": "min_distinct",
+   "patterns": [
+    "### 场景 1",
+    "### 场景 2",
+    "### 场景 3"
+   ],
+   "min": 3,
+   "desc": "Three Chinese scene headings"
+  }
+ ]
+}

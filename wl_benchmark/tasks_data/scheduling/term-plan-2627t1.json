@@ -1,0 +1,743 @@
+{
+ "id": "term-plan-2627t1-01",
+ "term": "2026-27 Term 1",
+ "seed": 20260916,
+ "student": {
+  "name": "WU, Lei",
+  "id": "124020372",
+  "admitted": "Sep 2024",
+  "major": "Financial Engineering",
+  "stream": "Quantitative Finance"
+ },
+ "study_scheme": {
+  "programme": "Financial Engineering — Quantitative Finance stream",
+  "major_required": [
+   "ECO3121",
+   "FIN3080",
+   "FIN3210",
+   "FIN4110",
+   "FIN4120",
+   "MAT2002",
+   "MAT3007",
+   "MAT3300",
+   "STA2002"
+  ],
+  "major_electives": {
+   "needed": 2,
+   "note": "3 of 5 already completed (CSC3002, CSC3100, DDA3020); no eligible major elective is offered this term",
+   "pool": [
+    "ACT4253",
+    "CSC2003",
+    "CSC3001",
+    "CSC3002",
+    "CSC3100",
+    "CSC3150",
+    "CSC3170",
+    "CSC3180",
+    "CSC4008",
+    "DDA3020",
+    "DDA4210",
+    "DMS3002",
+    "ECO3160",
+    "ECE4007",
+    "ERG3020",
+    "FIN4060",
+    "FIN4080",
+    "FIN4110",
+    "FIN4120",
+    "FIN4210",
+    "FIN4231",
+    "FMA4200",
+    "FMA4800",
+    "FTE4003",
+    "FTE4312",
+    "FTE4999",
+    "MAT3280",
+    "MAT4500",
+    "MKT4220",
+    "RMS4060",
+    "STA3001",
+    "STA3020",
+    "STA4001",
+    "STA4003",
+    "STA4020"
+   ]
+  },
+  "university_core_done": {
+   "Chinese (3u)": "CHI1000",
+   "English (12u)": "ENG1001/1002/2001/2002S",
+   "IT (1u)": "ITE1000",
+   "PE (2u)": "PED1001/1002"
+  },
+  "ge": {
+   "total_units": 18,
+   "structure": "foundations: GFH1000 (with humanity, 3u) + GFN1000 (with nature, 3u); areas: one course from each of GE-A (Chinese culture heritage), GE-B (nature, science & technology), GE-C (society & culture), GE-D (self & humanity)",
+   "completed": [
+    "GFN1000 (foundation)",
+    "GEA2000 (area A)"
+   ],
+   "remaining": [
+    "GFH1000 (foundation — the last one)",
+    "one course from each of areas B / C / D"
+   ],
+   "rules": [
+    "At most 2 GE courses may be taken in one term (Registry).",
+    "GEW-type courses (e.g. CEC declared as GEW, GEW2001) do NOT count toward the GE core — at most 6 units may be counted as free electives (Registry).",
+    "GFH and GFN cannot be taken in the same term (GFN1000 is already completed)."
+   ],
+   "source": "registry.cuhk.edu.cn 通识教育 (/page/21)"
+  },
+  "cec": {
+   "requirement": "exactly 2 CEC courses overall; you completed the 2000-level one (GEW2001 = CEC2000)",
+   "remaining": "CEC4000 must be taken this term (per your graduation audit)"
+  },
+  "registration_rules": [
+   "You are planning for 2026-27 Term 1 ONLY.",
+   "Prerequisites must be COMPLETED (grade earned) before the course can be taken; a course in progress does not satisfy a prerequisite; withdrawn (W) courses do not count as completed.",
+   "Take every remaining major-required course that is offered this term and whose prerequisites you have completed. Remaining required courses not offered this term are taken in later terms.",
+   "Register ONLY for courses in your remaining-requirements audit — no free electives this term.",
+   "Term load: the Registry allows 9-18 units per term; your plan must take a FULL 18-unit load.",
+   "Timetable constraint: your weekly timetable must leave FRIDAY completely free — no Friday sessions in any chosen section."
+  ]
+ },
+ "transcript": [
+  {
+   "term": "2024-25 T1",
+   "code": "ACT2111",
+   "title": "Introductory Financial Accounting",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T1",
+   "code": "CSC1001",
+   "title": "Introduction to Computer Science",
+   "units": 3,
+   "grade": "A"
+  },
+  {
+   "term": "2024-25 T1",
+   "code": "ECO2011",
+   "title": "Basic Microeconomics",
+   "units": 3,
+   "grade": "A-"
+  },
+  {
+   "term": "2024-25 T1",
+   "code": "ENG1001",
+   "title": "English Bridge Program",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T1",
+   "code": "MAT1001",
+   "title": "Calculus I",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T1",
+   "code": "PED1001",
+   "title": "Physical Education",
+   "units": 1,
+   "grade": "A"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "CHI1000",
+   "title": "Chinese",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "CSC1002",
+   "title": "Computational Laboratory",
+   "units": 1,
+   "grade": "A-"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "ENG1002",
+   "title": "English for Academic Purposes I",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "FIN2010",
+   "title": "Financial Management",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "ITE1000",
+   "title": "Information Technology",
+   "units": 1,
+   "grade": "DI"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "MAT1002",
+   "title": "Calculus II",
+   "units": 3,
+   "grade": "B"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "PED1002",
+   "title": "Fitness and Health",
+   "units": 1,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 T2",
+   "code": "STA2001",
+   "title": "Probability and Statistics I",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2024-25 Summer",
+   "code": "STA2002",
+   "title": "Probability and Statistics II",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "ECO3121",
+   "title": "Introductory Econometrics",
+   "units": 3,
+   "grade": "W"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "ENG2001",
+   "title": "English for Academic Purposes II",
+   "units": 3,
+   "grade": "B"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "GEA2000",
+   "title": "Modern Chinese History and Culture",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "GFN1000",
+   "title": "In Dialogue with Nature",
+   "units": 3,
+   "grade": "B"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "MAT2040",
+   "title": "Linear Algebra",
+   "units": 3,
+   "grade": "C"
+  },
+  {
+   "term": "2025-26 T1",
+   "code": "MAT3007",
+   "title": "Optimization",
+   "units": 3,
+   "grade": "W"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "CSC3002",
+   "title": "C/C++ Programming",
+   "units": 3,
+   "grade": "A-"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "CSC3100",
+   "title": "Data Structures",
+   "units": 3,
+   "grade": "B+"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "DDA3020",
+   "title": "Machine Learning",
+   "units": 3,
+   "grade": "B-"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "ENG2002S",
+   "title": "English for Science and Engineering",
+   "units": 3,
+   "grade": "A-"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "FIN2020",
+   "title": "Foundation of Finance",
+   "units": 3,
+   "grade": "A-"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "GEW2001",
+   "title": "Introduction to Marxism",
+   "units": 3,
+   "grade": "DI"
+  },
+  {
+   "term": "2025-26 T2",
+   "code": "MAT2002",
+   "title": "Ordinary Differential Equations",
+   "units": 3,
+   "grade": "B-"
+  }
+ ],
+ "courses": [
+  {
+   "code": "ECO3121",
+   "title": "Introductory Econometrics",
+   "units": 3,
+   "prereq": [
+    "ECO2011"
+   ],
+   "ge": false,
+   "ge_area": null,
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "ECO3121-01",
+     "sessions": [
+      {
+       "days": [
+        "Tu",
+        "Th"
+       ],
+       "start": "10:30",
+       "end": "11:20",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo",
+        "Tu"
+       ],
+       "start": "16:00",
+       "end": "17:00",
+       "type": "Tutorial"
+      },
+      {
+       "days": [
+        "We",
+        "Th"
+       ],
+       "start": "15:00",
+       "end": "17:30",
+       "type": "Lab"
+      }
+     ]
+    },
+    {
+     "section_id": "ECO3121-02",
+     "sessions": [
+      {
+       "days": [
+        "Fr"
+       ],
+       "start": "13:53",
+       "end": "15:23",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Th"
+       ],
+       "start": "12:19",
+       "end": "13:19",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "FIN3080",
+   "title": "Investment Analysis and Portfolio Management",
+   "units": 3,
+   "prereq": [
+    "FIN2010"
+   ],
+   "ge": false,
+   "ge_area": null,
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "FIN3080-01",
+     "sessions": [
+      {
+       "days": [
+        "Mo",
+        "Th"
+       ],
+       "start": "17:45",
+       "end": "19:45",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Th"
+       ],
+       "start": "11:45",
+       "end": "12:40",
+       "type": "Tutorial"
+      }
+     ]
+    },
+    {
+     "section_id": "FIN3080-02",
+     "sessions": [
+      {
+       "days": [
+        "Th"
+       ],
+       "start": "14:04",
+       "end": "15:49",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "15:54",
+       "end": "16:49",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "MAT3007",
+   "title": "Optimization",
+   "units": 3,
+   "prereq": [
+    "MAT2040"
+   ],
+   "ge": false,
+   "ge_area": null,
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "MAT3007-01",
+     "sessions": [
+      {
+       "days": [
+        "Mo",
+        "We"
+       ],
+       "start": "08:30",
+       "end": "09:25",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo",
+        "We"
+       ],
+       "start": "12:00",
+       "end": "13:30",
+       "type": "Tutorial"
+      }
+     ]
+    },
+    {
+     "section_id": "MAT3007-02",
+     "sessions": [
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "13:59",
+       "end": "14:49",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo"
+       ],
+       "start": "09:24",
+       "end": "10:09",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GFH1000",
+   "title": "In Dialogue with Humanity",
+   "units": 3,
+   "prereq": [],
+   "ge": true,
+   "ge_area": null,
+   "ge_foundation": true,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "GFH1000-01",
+     "sessions": [
+      {
+       "days": [
+        "We",
+        "Th"
+       ],
+       "start": "09:45",
+       "end": "10:30",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Sa"
+       ],
+       "start": "17:15",
+       "end": "19:00",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "CEC4000",
+   "title": "Socialism with Chinese Characteristics for A New Era",
+   "units": 3,
+   "prereq": [],
+   "ge": false,
+   "ge_area": null,
+   "ge_foundation": false,
+   "cec": true,
+   "sections": [
+    {
+     "section_id": "CEC4000-01",
+     "sessions": [
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "13:15",
+       "end": "14:15",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Sa"
+       ],
+       "start": "09:30",
+       "end": "10:25",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GED2001",
+   "title": "Introduction to Philosophy",
+   "units": 3,
+   "prereq": [],
+   "ge": true,
+   "ge_area": "D",
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "GED2001-01",
+     "sessions": [
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "14:15",
+       "end": "15:30",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo"
+       ],
+       "start": "09:30",
+       "end": "10:20",
+       "type": "Tutorial"
+      }
+     ]
+    },
+    {
+     "section_id": "GED2001-02",
+     "sessions": [
+      {
+       "days": [
+        "Sa"
+       ],
+       "start": "10:01",
+       "end": "11:21",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo"
+       ],
+       "start": "12:03",
+       "end": "12:48",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GEC2002",
+   "title": "Living Sociology",
+   "units": 3,
+   "prereq": [],
+   "ge": true,
+   "ge_area": "C",
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "GEC2002-01",
+     "sessions": [
+      {
+       "days": [
+        "Fr"
+       ],
+       "start": "09:00",
+       "end": "10:30",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Fr"
+       ],
+       "start": "14:00",
+       "end": "15:30",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "GEB2001",
+   "title": "Environmental Science",
+   "units": 3,
+   "prereq": [],
+   "ge": true,
+   "ge_area": "B",
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "GEB2001-01",
+     "sessions": [
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "14:02",
+       "end": "15:17",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Tu"
+       ],
+       "start": "13:25",
+       "end": "14:55",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "FIN4120",
+   "title": "Fixed Income Securities Analysis",
+   "units": 3,
+   "prereq": [
+    "FIN3080"
+   ],
+   "ge": false,
+   "ge_area": null,
+   "ge_foundation": false,
+   "cec": false,
+   "sections": [
+    {
+     "section_id": "FIN4120-01",
+     "sessions": [
+      {
+       "days": [
+        "Th"
+       ],
+       "start": "12:45",
+       "end": "14:05",
+       "type": "Lecture"
+      },
+      {
+       "days": [
+        "Mo",
+        "Tu"
+       ],
+       "start": "15:30",
+       "end": "16:50",
+       "type": "Tutorial"
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "audit": {
+  "required_take": [
+   "ECO3121",
+   "FIN3080",
+   "MAT3007"
+  ],
+  "required_ineligible": [
+   "FIN4120"
+  ],
+  "required_not_offered": [
+   "FIN3210",
+   "FIN4110",
+   "MAT3300"
+  ],
+  "gfh_required": "GFH1000",
+  "cec4000_required": "CEC4000",
+  "area_choose_from": [
+   "GEC2002",
+   "GEB2001",
+   "GED2001"
+  ],
+  "ge_max_per_term": 2,
+  "unit_exact": 18,
+  "friday_free": true
+ },
+ "unique_solution": {
+  "ECO3121": "ECO3121-01",
+  "FIN3080": "FIN3080-01",
+  "MAT3007": "MAT3007-01",
+  "GFH1000": "GFH1000-01",
+  "CEC4000": "CEC4000-01",
+  "GED2001": "GED2001-01"
+ },
+ "_n_solutions": 1,
+ "_n_solutions_relaxed": 3
+}
