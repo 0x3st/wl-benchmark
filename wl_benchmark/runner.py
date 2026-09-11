@@ -26,32 +26,47 @@ from .tasks import build_tasks
 
 
 class _Progress:
-    """Single-line in-place progress bar (TTY; pipes get terse lines).
+    """Per-task progress block, docker-pull style (TTY; pipes get terse
+    one-liners).
 
-    A daemon thread redraws every 0.25 s; state mutations are
-    lock-guarded. Nothing else prints while the run is in flight.
+    While tasks run, the block shows one line per RUNNING worker slot:
+    a spinner, the task, its elapsed time and its API call count — plus
+    a header line with done/failed totals. A daemon thread redraws the
+    whole block every 0.25 s using ANSI cursor moves.
     """
 
-    def __init__(self, total: int, t0: float):
+    SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, total: int, t0: float, workers: int = 3):
         self.total = total
+        self.workers = max(1, workers)
         self.finished = 0
         self.failed = 0
-        self.running: list = []          # [(task_type, task_id)]
+        self.entries: dict = {}          # task_id -> dict(type, t0, calls)
         self.t0 = t0
         self.tty = sys.stdout.isatty()
         self.stop_evt = threading.Event()
         self._lock = threading.Lock()
+        self._last_lines = 0
+        self._frame = 0
         if self.tty:
             threading.Thread(target=self._spin, daemon=True).start()
 
+    # ---- worker-thread API -------------------------------------------
     def start(self, task):
         with self._lock:
-            self.running.append((task.task_type, task.task_id))
+            self.entries[task.task_id] = {"type": task.task_type,
+                                          "t0": time.time(), "calls": 0}
 
     def end_task(self, task):
         with self._lock:
-            self.running = [(t, i) for t, i in self.running
-                            if i != task.task_id]
+            self.entries.pop(task.task_id, None)
+
+    def bump(self, task_id):
+        """One more API call inside this task."""
+        with self._lock:
+            if task_id in self.entries:
+                self.entries[task_id]["calls"] += 1
 
     def finish(self, r):
         with self._lock:
@@ -63,18 +78,31 @@ class _Progress:
             print(f"{word} {self.finished}/{self.total} {r.task_id}",
                   flush=True)
 
+    # ---- rendering -----------------------------------------------------
+    def _fmt_elapsed(self, seconds: float) -> str:
+        m, s = divmod(int(seconds), 60)
+        return f"{m}:{s:02d}"
+
     def _render(self):
-        el = time.time() - self.t0
-        filled = int(self.finished / max(1, self.total) * 20)
-        bar = "█" * filled + "░" * (20 - filled)
+        self._frame = (self._frame + 1) % len(self.SPIN)
+        el_total = self._fmt_elapsed(time.time() - self.t0)
+        lines = [f"{self.finished}/{self.total} done · {self.failed} failed"
+                 f" · {el_total} elapsed"]
         with self._lock:
-            run = list(self.running)
-        now = ", ".join(i for _, i in run[:2])
-        if len(run) > 2:
-            now += f" +{len(run) - 2} more"
-        sys.stdout.write(f"\r[{bar}] {self.finished}/{self.total}"
-                         f" · {el:3.0f}s · {now}   ")
+            entries = list(self.entries.items())
+        for tid, e in entries[:self.workers]:
+            spin = self.SPIN[self._frame]
+            el = self._fmt_elapsed(time.time() - e["t0"])
+            calls = e["calls"]
+            lines.append(f"  {spin} {e['type']:<10} {tid:<24} "
+                         f"{el:>6} · {calls} call{'s' if calls != 1 else ''}")
+        # clear the previously drawn block, then draw the new one
+        out = ["\r\x1b[2K"]
+        out += ["\x1b[1A\x1b[2K"] * (self._last_lines - 1)
+        out.append("\n".join(lines))
+        sys.stdout.write("".join(out))
         sys.stdout.flush()
+        self._last_lines = len(lines)
 
     def _spin(self):
         while not self.stop_evt.wait(0.25):
@@ -82,8 +110,10 @@ class _Progress:
 
     def close(self):
         self.stop_evt.set()
-        if self.tty:
-            sys.stdout.write("\r" + " " * 110 + "\r")
+        if self.tty and self._last_lines:
+            sys.stdout.write("\r\x1b[2K"
+                             + "\x1b[1A\x1b[2K" * (self._last_lines - 1))
+            self._last_lines = 0
             sys.stdout.flush()
 
 
@@ -136,7 +166,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
     # ---- single-line progress bar (no streaming logs) ------------------
-    progress = _Progress(len(tasks), t0)
+    progress = _Progress(len(tasks), t0, workers=jobs)
 
     def report(r):
         progress.finish(r)
@@ -144,10 +174,21 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
             all_results.append(r.to_dict())
         dump()
 
+    class _CountingClient:
+        """Delegates to the shared client; counts API calls per task."""
+        def __init__(self, inner, task):
+            self._inner, self._task = inner, task
+        def chat(self, *a, **k):
+            progress.bump(self._task.task_id)
+            return self._inner.chat(*a, **k)
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
     def run_one(task, snapshot):
         progress.start(task)
         try:
-            result = task.run(client, model, context=snapshot)
+            result = task.run(_CountingClient(client, task), model,
+                              context=snapshot)
         except Exception as e:  # noqa: BLE001
             from .tasks.base import TaskResult
             result = TaskResult(task_id=task.task_id,

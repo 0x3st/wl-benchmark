@@ -105,8 +105,7 @@ def _ask_parallel(run_cfg: dict, args) -> None:
     if not sys.stdin.isatty():
         return                                  # scripted run: keep default
     default = int(run_cfg.get("parallel_jobs", 3))
-    raw = input(f"How many tasks to run in parallel? "
-                f"(press Enter for {default}, 1 = one at a time): ").strip()
+    raw = input(f"How many tasks in parallel? (default {default}): ").strip()
     if raw.isdigit() and int(raw) >= 1:
         run_cfg["parallel_jobs"] = int(raw)
     else:
