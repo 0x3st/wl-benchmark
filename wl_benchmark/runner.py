@@ -25,112 +25,6 @@ from .client import ChatClient
 from .tasks import build_tasks
 
 
-class _Progress:
-    """Per-task progress block, docker-pull style (TTY; pipes get terse
-    one-liners).
-
-    While tasks run, the block shows one line per RUNNING worker slot:
-    a spinner, the task, its elapsed time and its API call count — plus
-    a header line with done/failed totals. A daemon thread redraws the
-    whole block every 0.25 s using ANSI cursor moves.
-    """
-
-    SPIN = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-
-    def __init__(self, total: int, t0: float, workers: int = 3,
-                 expected_calls: dict | None = None):
-        self.total = total
-        self.workers = max(1, workers)
-        self.expected = expected_calls or {}   # task_type -> expected calls
-        self.finished = 0
-        self.failed = 0
-        self.entries: dict = {}          # task_id -> dict(type, t0, calls)
-        self.t0 = t0
-        self.tty = sys.stdout.isatty()
-        self.stop_evt = threading.Event()
-        self._lock = threading.Lock()
-        self._last_lines = 0
-        self._frame = 0
-        if self.tty:
-            threading.Thread(target=self._spin, daemon=True).start()
-
-    # ---- worker-thread API -------------------------------------------
-    def start(self, task):
-        with self._lock:
-            self.entries[task.task_id] = {"type": task.task_type,
-                                          "t0": time.time(), "calls": 0}
-
-    def end_task(self, task):
-        with self._lock:
-            self.entries.pop(task.task_id, None)
-
-    def bump(self, task_id):
-        """One more API call inside this task."""
-        with self._lock:
-            if task_id in self.entries:
-                self.entries[task_id]["calls"] += 1
-
-    def finish(self, r):
-        with self._lock:
-            self.finished += 1
-            if getattr(r, "error", None):
-                self.failed += 1
-        if not self.tty:
-            word = "fail" if getattr(r, "error", None) else "done"
-            print(f"{word} {self.finished}/{self.total} {r.task_id}",
-                  flush=True)
-
-    # ---- rendering -----------------------------------------------------
-    def _fmt_elapsed(self, seconds: float) -> str:
-        m, s = divmod(int(seconds), 60)
-        return f"{m}:{s:02d}"
-
-    def _render(self):
-        self._frame = (self._frame + 1) % len(self.SPIN)
-        el_total = self._fmt_elapsed(time.time() - self.t0)
-        lines = [f"{self.finished}/{self.total} done · {self.failed} failed"
-                 f" · {el_total} elapsed"]
-        with self._lock:
-            entries = list(self.entries.items())
-        width = 14
-        for tid, e in entries[:self.workers]:
-            spin = self.SPIN[self._frame]
-            el = self._fmt_elapsed(time.time() - e["t0"])
-            calls = e["calls"]
-            exp = self.expected.get(e["type"], 0)
-            if exp > 1:
-                # determinate: completed calls over the expected total
-                frac = min(max(0, calls - 1) / exp, 1.0)
-                filled = int(frac * width)
-                bar = "█" * filled + "░" * (width - filled)
-            else:
-                # indeterminate (single long call): bouncing segment
-                pos = self._frame % (width - 3)
-                bar = "░" * pos + "███" + "░" * (width - 3 - pos)
-            lines.append(f"  {spin} {e['type']:<10} {tid:<24} "
-                         f"[{bar}] {el:>6} · "
-                         f"{calls} call{'s' if calls != 1 else ''}")
-        # clear the previously drawn block, then draw the new one
-        out = ["\r\x1b[2K"]
-        out += ["\x1b[1A\x1b[2K"] * (self._last_lines - 1)
-        out.append("\n".join(lines))
-        sys.stdout.write("".join(out))
-        sys.stdout.flush()
-        self._last_lines = len(lines)
-
-    def _spin(self):
-        while not self.stop_evt.wait(0.25):
-            self._render()
-
-    def close(self):
-        self.stop_evt.set()
-        if self.tty and self._last_lines:
-            sys.stdout.write("\r\x1b[2K"
-                             + "\x1b[1A\x1b[2K" * (self._last_lines - 1))
-            self._last_lines = 0
-            sys.stdout.flush()
-
-
 def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
             out_root: str = "results") -> str:
     """Run the whole task list; returns the run output directory."""
@@ -179,42 +73,31 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
 
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
-    # ---- single-line progress bar (no streaming logs) ------------------
-    expected = {"essay": 1, "svg": 1,
-                "scheduling": run_cfg.get("scheduling_max_turns", 16) + 1,
-                "quant": run_cfg.get("quant_max_turns", 16) + 1}
-    progress = _Progress(len(tasks), t0, workers=jobs,
-                         expected_calls=expected)
+    def running_line():
+        """One in-place line, rewritten only when a task completes."""
+        if not sys.stdout.isatty():
+            return
+        mins = (time.time() - t0) / 60
+        n_err = sum(1 for r in all_results if r.get("error"))
+        sys.stdout.write(f"\rrunning  {len(all_results)}/{len(tasks)} · "
+                         f"{n_err} failed · {mins:.1f} min   ")
+        sys.stdout.flush()
 
     def report(r):
-        progress.finish(r)
         with dump_lock:
             all_results.append(r.to_dict())
         dump()
-
-    class _CountingClient:
-        """Delegates to the shared client; counts API calls per task."""
-        def __init__(self, inner, task):
-            self._inner, self._task = inner, task
-        def chat(self, *a, **k):
-            progress.bump(self._task.task_id)
-            return self._inner.chat(*a, **k)
-        def __getattr__(self, name):
-            return getattr(self._inner, name)
+        running_line()
 
     def run_one(task, snapshot):
-        progress.start(task)
         try:
-            result = task.run(_CountingClient(client, task), model,
-                              context=snapshot)
+            return task.run(client, model, context=snapshot)
         except Exception as e:  # noqa: BLE001
             from .tasks.base import TaskResult
-            result = TaskResult(task_id=task.task_id,
-                                task_type=task.task_type,
-                                model=model, provider=client.label,
-                                error=str(e))
-        progress.end_task(task)
-        return result
+            return TaskResult(task_id=task.task_id,
+                              task_type=task.task_type,
+                              model=model, provider=client.label,
+                              error=str(e))
 
     finished: set = set()   # task_ids with a recorded result
     failed: set = set()     # error/skipped — blocks dependents
@@ -288,19 +171,20 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                     context_store[tid] = r
                 report(r)
 
-        progress.close()
         if not interrupted:
             mins = (time.time() - t0) / 60
             n_err = sum(1 for r in all_results if r.get("error"))
             print(f"done      {len(all_results)}/{len(tasks)} tasks · "
                   f"{n_err} failed · {mins:.1f} min\n")
     finally:
-        progress.close()
+        pass
         # on Ctrl+C: drop the queue, do NOT wait for in-flight API calls —
         # the incremental dump already persisted every finished result
         pool.shutdown(wait=interrupted is False, cancel_futures=interrupted)
 
     if interrupted:
+        if sys.stdout.isatty():
+            sys.stdout.write("\r" + " " * 60 + "\r")
         print("[runner] interrupted by user — completed results kept "
               f"at {out_dir} (upload later with: wlb --upload {out_dir})",
               flush=True)
