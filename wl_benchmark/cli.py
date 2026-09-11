@@ -118,7 +118,7 @@ def cmd_run(args) -> None:
                              else (None, None))
 
     provider = _prompt_provider(args)
-    run_cfg = _load_run_cfg(args.config)
+    run_cfg = _load_run_cfg(DEFAULT_CONFIG)
     _ask_parallel(run_cfg, args)
 
     # the user spent seconds typing endpoint/key — the PyPI lookup had
@@ -203,12 +203,8 @@ def do_report(run_dir: str) -> None:
 
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(
-        prog="wlb",
-        description=f"{BRAND} — bare `wlb` starts the guided flow: endpoint "
-                "-> key -> pick a model -> parallelism -> test -> share link")
-    p.add_argument("--config", default=DEFAULT_CONFIG,
-                   help="optional run-parameter JSON "
-                        "(default config/bench.json; may not exist)")
+        prog="wlb", add_help=False,
+        description=f"{BRAND} — just run `wlb`; -V prints the version")
     p.add_argument("-V", "--version", action="version",
                    version=f"{BRAND} {VERSION} (wl-benchmark)")
     # power options — undocumented on purpose, the guided flow is the surface
@@ -222,7 +218,10 @@ def main(argv=None) -> None:
     p.add_argument("--keep", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--upload", metavar="RUN_DIR", help=argparse.SUPPRESS)
     p.add_argument("--report", metavar="RUN_DIR", help=argparse.SUPPRESS)
-    args = p.parse_args(argv)
+    args, extra = p.parse_known_args(argv)
+    if extra:
+        p.error(f"unknown arguments: {' '.join(extra)} — just run `wlb`; "
+                f"-V prints the version")
 
     if args.upload:
         do_upload(args.upload, keep=args.keep)
