@@ -152,12 +152,8 @@ def maybe_upgrade(latest: str | None, interactive: bool = True) -> None:
     Exits the process after a successful upgrade — the running code is
     the old one, so the user should re-run `wlb` on the new version.
     """
-    mode = install_mode()
-    current = running_version()
-    if mode == "source":
-        if latest and latest != current:
-            print(f"[update] v{latest} available — dev checkout, run "
-                  f"`git pull` to update")
+    if install_mode() == "source":
+        # a checkout is by definition the freshest code; never nag
         return
     if not latest or latest <= current:
         return
