@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import threading
 import time
 import urllib.request
@@ -108,11 +109,13 @@ def latest_pypi(timeout: float = 2.5) -> str | None:
 
 # --------------------------------------------------------------- update
 def _update_command(mode: str) -> list[str] | None:
-    return {
-        "pipx": ["pipx", "upgrade", PKG],
-        "brew": ["brew", "upgrade", "0x3st/tap/wlb"],
-        "pip": [sys.executable, "-m", "pip", "install", "--upgrade", PKG],
-    }.get(mode)
+    if mode == "pipx":
+        return ["pipx", "upgrade", PKG]
+    if mode == "brew":
+        return ["brew", "upgrade", "0x3st/tap/wlb"]
+    if mode == "pip":
+        return [sys.executable, "-m", "pip", "install", "--upgrade", PKG]
+    return None
 
 
 def update(mode: str) -> bool:
