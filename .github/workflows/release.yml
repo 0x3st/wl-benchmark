@@ -70,7 +70,10 @@ jobs:
           SHA256="$(curl -fsSL "$URL" | sha256sum | cut -d' ' -f1)"
 
           FORMULA=$(cat <<RUBY
+          require "language/python"
+
           class Wlb < Formula
+            include Language::Python::Virtualenv
             desc "Agentic AI benchmark of CUHK-Shenzhen (essay / SVG / quant / scheduling)"
             homepage "https://github.com/0x3st/wl-benchmark"
             url "${URL}"
