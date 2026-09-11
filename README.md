@@ -118,6 +118,31 @@ The proposal must carry full method rigor: sampling frame and target N, operatio
 
 The output should be in markdown format, in both English and Chinese (中英双语): English 1100-1600 words, Chinese 1700-2600 characters.
 
+## Installation
+
+Pick any one of the three channels:
+
+```bash
+# PyPI (recommended)
+pip install wl-benchmark          # or: pipx install wl-benchmark
+
+# Homebrew (macOS / Linux)
+brew tap 0x3st/tap https://github.com/0x3st/homebrew-tap
+brew install wlb
+
+# From source
+pip install .
+# or run directly from a checkout, no install:
+./wlb --help
+```
+
+The package is Python >= 3.9 with **zero third-party dependencies**
+(stdlib only). All three channels expose the same command: `wlb`.
+
+New releases are cut automatically by CI — push a tag `vX.Y.Z` and it
+publishes to PyPI, creates the GitHub Release and updates the Homebrew
+tap in one go.
+
 ## Usage
 
 The tool is self-contained (Python standard library only, no third-party dependencies). It is a pure instrument: **no provider presets are stored** — every run interactively asks for the target under test.
