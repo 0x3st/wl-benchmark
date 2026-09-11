@@ -46,9 +46,8 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     client.label = provider.get("name") or model
 
     t0 = time.time()
-    print(f"provider : {client.label}  ({provider['base_url']})")
-    print(f"model    : {model}")
-    print(f"tasks    : {len(tasks)}   output: {out_dir}")
+    print(f"provider  {client.label} · {model}")
+    print(f"output    {out_dir}")
 
     all_results: list = []
     import threading
@@ -72,21 +71,28 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 dependents[d].append(tid)
 
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
-    if jobs > 1 and len(tasks) > 1:
-        print(f"parallel: {jobs} workers")
-    else:
-        print("parallel: off")
+
+    def status(word, task_type, task_id, tail=""):
+        # fixed columns: status(5) · type(10) · id(24) · tail
+        print(f"{word:<5} {task_type:<10} {task_id:<24} {tail}".rstrip(),
+              flush=True)
 
     def report(r):
-        tag = f"[{r.task_type}] {r.task_id}"
-        if r.error:
-            print(f"x {tag} — {str(r.error)[:100]}", flush=True)
+        first_line = str(r.error).splitlines()[0] if r.error else ""
+        if first_line.startswith("skipped: "):
+            word, tail = "skip", first_line[len("skipped: "):][:72]
+        elif r.error:
+            word = "fail"
+            tail = f"{r.latency:6.1f}s  {first_line[:60]}"
         elif r.score is None:
-            arts = ", ".join(os.path.relpath(a) for a in r.artifacts) or "-"
-            print(f"o {tag} — pending human review ({r.latency:.1f}s) "
-                  f"artifacts: {arts}", flush=True)
+            word = "done"
+            n = len(r.artifacts)
+            tail = f"{r.latency:6.1f}s  pending human review" + \
+                   (f" · {n} artifact{'s' if n != 1 else ''}" if n else "")
         else:
-            print(f"OK {tag} — {r.score:.2f} ({r.latency:.1f}s)", flush=True)
+            word = "done"
+            tail = f"{r.latency:6.1f}s  score {r.score:.2f}"
+        status(word, r.task_type, r.task_id, tail)
         with dump_lock:
             all_results.append(r.to_dict())
         dump()
@@ -94,7 +100,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     def run_one(task, snapshot):
         # printed from the worker thread — reflects ACTUAL concurrency,
         # not queue submission (max_workers lines can be open at once)
-        print(f"start {task.task_type} {task.task_id}", flush=True)
+        status("start", task.task_type, task.task_id)
         try:
             return task.run(client, model, context=snapshot)
         except Exception as e:  # noqa: BLE001
@@ -177,8 +183,11 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 report(r)
 
         if not interrupted:
-            print(f"\n[runner] done in {(time.time()-t0)/60:.1f} min "
-                  f"-> {out_dir}")
+            n_ok = sum(1 for r in all_results if not r.get("error"))
+            n_err = sum(1 for r in all_results if r.get("error"))
+            mins = (time.time() - t0) / 60
+            print(f"\ndone    {len(all_results)}/{len(tasks)} tasks · "
+                  f"{n_err} failed · {mins:.1f} min")
     finally:
         # on Ctrl+C: drop the queue, do NOT wait for in-flight API calls —
         # the incremental dump already persisted every finished result
@@ -194,7 +203,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     try:
         from .review_pdf import build_review_pdf
         pdf = build_review_pdf(out_dir)
-        print(f"[runner] review pdf -> {pdf}")
+        print(f"review  {pdf}")
     except Exception as e:  # noqa: BLE001
-        print(f"[runner] review pdf skipped ({e})")
+        print(f"review  skipped ({e})")
     return out_dir
