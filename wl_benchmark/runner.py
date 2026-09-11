@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import threading
 import time
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -21,6 +23,68 @@ from typing import Optional
 
 from .client import ChatClient
 from .tasks import build_tasks
+
+
+class _Progress:
+    """Single-line in-place progress bar (TTY; pipes get terse lines).
+
+    A daemon thread redraws every 0.25 s; state mutations are
+    lock-guarded. Nothing else prints while the run is in flight.
+    """
+
+    def __init__(self, total: int, t0: float):
+        self.total = total
+        self.finished = 0
+        self.failed = 0
+        self.running: list = []          # [(task_type, task_id)]
+        self.t0 = t0
+        self.tty = sys.stdout.isatty()
+        self.stop_evt = threading.Event()
+        self._lock = threading.Lock()
+        if self.tty:
+            threading.Thread(target=self._spin, daemon=True).start()
+
+    def start(self, task):
+        with self._lock:
+            self.running.append((task.task_type, task.task_id))
+
+    def end_task(self, task):
+        with self._lock:
+            self.running = [(t, i) for t, i in self.running
+                            if i != task.task_id]
+
+    def finish(self, r):
+        with self._lock:
+            self.finished += 1
+            if getattr(r, "error", None):
+                self.failed += 1
+        if not self.tty:
+            word = "fail" if getattr(r, "error", None) else "done"
+            print(f"{word} {self.finished}/{self.total} {r.task_id}",
+                  flush=True)
+
+    def _render(self):
+        el = time.time() - self.t0
+        filled = int(self.finished / max(1, self.total) * 20)
+        bar = "█" * filled + "░" * (20 - filled)
+        with self._lock:
+            run = list(self.running)
+        now = ", ".join(i for _, i in run[:2])
+        if len(run) > 2:
+            now += f" +{len(run) - 2} more"
+        sys.stdout.write(f"\r[{bar}] {self.finished}/{self.total}"
+                         f" · {el:3.0f}s · {now}   ")
+        sys.stdout.flush()
+
+    def _spin(self):
+        while not self.stop_evt.wait(0.25):
+            self._render()
+
+    def close(self):
+        self.stop_evt.set()
+        if self.tty:
+            sys.stdout.write("\r" + " " * 110 + "\r")
+            sys.stdout.flush()
 
 
 def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
@@ -50,7 +114,6 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     print(f"output    {out_dir}")
 
     all_results: list = []
-    import threading
     dump_lock = threading.Lock()
 
     def dump():
@@ -72,43 +135,27 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
 
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
-    def status(word, task_type, task_id, tail=""):
-        # fixed columns: status(5) · type(10) · id(24) · tail
-        print(f"{word:<5} {task_type:<10} {task_id:<24} {tail}".rstrip(),
-              flush=True)
+    # ---- single-line progress bar (no streaming logs) ------------------
+    progress = _Progress(len(tasks), t0)
 
     def report(r):
-        first_line = str(r.error).splitlines()[0] if r.error else ""
-        if first_line.startswith("skipped: "):
-            word, tail = "skip", first_line[len("skipped: "):][:72]
-        elif r.error:
-            word = "fail"
-            tail = f"{r.latency:6.1f}s  {first_line[:60]}"
-        elif r.score is None:
-            word = "done"
-            n = len(r.artifacts)
-            tail = f"{r.latency:6.1f}s  pending human review" + \
-                   (f" · {n} artifact{'s' if n != 1 else ''}" if n else "")
-        else:
-            word = "done"
-            tail = f"{r.latency:6.1f}s  score {r.score:.2f}"
-        status(word, r.task_type, r.task_id, tail)
+        progress.finish(r)
         with dump_lock:
             all_results.append(r.to_dict())
         dump()
 
     def run_one(task, snapshot):
-        # printed from the worker thread — reflects ACTUAL concurrency,
-        # not queue submission (max_workers lines can be open at once)
-        status("start", task.task_type, task.task_id)
+        progress.start(task)
         try:
-            return task.run(client, model, context=snapshot)
+            result = task.run(client, model, context=snapshot)
         except Exception as e:  # noqa: BLE001
             from .tasks.base import TaskResult
-            return TaskResult(task_id=task.task_id,
-                              task_type=task.task_type,
-                              model=model, provider=client.label,
-                              error=str(e))
+            result = TaskResult(task_id=task.task_id,
+                                task_type=task.task_type,
+                                model=model, provider=client.label,
+                                error=str(e))
+        progress.end_task(task)
+        return result
 
     finished: set = set()   # task_ids with a recorded result
     failed: set = set()     # error/skipped — blocks dependents
@@ -182,22 +229,34 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                     context_store[tid] = r
                 report(r)
 
+        progress.close()
         if not interrupted:
-            n_ok = sum(1 for r in all_results if not r.get("error"))
-            n_err = sum(1 for r in all_results if r.get("error"))
             mins = (time.time() - t0) / 60
-            print(f"\ndone    {len(all_results)}/{len(tasks)} tasks · "
-                  f"{n_err} failed · {mins:.1f} min")
+            n_err = sum(1 for r in all_results if r.get("error"))
+            print(f"done      {len(all_results)}/{len(tasks)} tasks · "
+                  f"{n_err} failed · {mins:.1f} min\n")
     finally:
+        progress.close()
         # on Ctrl+C: drop the queue, do NOT wait for in-flight API calls —
         # the incremental dump already persisted every finished result
         pool.shutdown(wait=interrupted is False, cancel_futures=interrupted)
 
     if interrupted:
-        print(f"\n[runner] interrupted by user — completed results kept "
+        print("[runner] interrupted by user — completed results kept "
               f"at {out_dir} (upload later with: wlb --upload {out_dir})",
               flush=True)
         os._exit(130)    # skip the executor's atexit join; data is dumped
+
+    # compact result table (the only per-task output, all at once)
+    for r in all_results:
+        if r.get("error"):
+            tail = "FAIL " + str(r["error"]).splitlines()[0][:52]
+        elif r.get("score") is None:
+            tail = "pending human review"
+        else:
+            tail = f"score {r['score']:.2f}"
+        print(f"  {r['task_type']:<10} {r['task_id']:<24} {tail}")
+    print()
 
     # compile the single human-review PDF
     try:

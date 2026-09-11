@@ -155,10 +155,15 @@ The endpoint offers 25 models:
   2. claude-...
 Pick a number, or type a model name: 2
 Parallel workers [3] (1 = sequential): ↵
-provider : ...   model: ...   tasks: 8
-start essay 01-storytelling
-...
-OK [scheduling] term-plan-2627t1-01 — 0.95
+provider  agi.tontian.com · claude-sonnet-4-6
+output    results/20260911-183022
+[███████████████░░░░░] 6/8 · 5.2 min · term-plan-2627t1-01, 03-proposal
+
+done      8/8 tasks · 0 failed · 5.4 min
+
+  essay       01-storytelling          pending human review
+  scheduling  term-plan-2627t1-01      score 0.95
+  ...
 
 [cli] run complete: 8 task results in results/20260911-...
 Upload results to the benchmark platform now? [Y/n] y
@@ -168,7 +173,8 @@ Upload results to the benchmark platform now? [Y/n] y
 
 - The endpoint's model list is fetched after the key is entered, so you pick by number.
 - Independent tasks run concurrently (default 3 workers); the research
-  proposal waits for the two earlier writings it consumes.
+  proposal waits for the two earlier writings it consumes. While tasks
+  run, a single-line progress bar is shown — no streaming logs.
 - **Nothing is uploaded automatically** — answer `n` and the run stays
   local; upload later with `wlb --upload results/<timestamp>`.
 - If a newer release exists on PyPI, `wlb` offers to self-update before
