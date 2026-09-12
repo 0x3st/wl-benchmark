@@ -14,11 +14,25 @@ captured = []
 
 
 class FakeResponse:
+    """Works for both parse paths: read() for non-streaming JSON,
+    iteration for SSE deltas."""
+
     def __init__(self, payload):
         self._d = json.dumps(payload).encode()
+        choice = (payload.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        delta = {"content": msg.get("content"),
+                 "reasoning_content": None, "tool_calls": None}
+        sse_choice = {"delta": delta, "finish_reason": choice.get("finish_reason")}
+        self._sse = ("data: " + json.dumps(
+            {"choices": [sse_choice], "usage": payload.get("usage", {})},
+            ensure_ascii=False) + "\n\ndata: [DONE]\n\n").encode()
 
     def read(self):
         return self._d
+
+    def __iter__(self):
+        return iter(self._sse.splitlines(keepends=True))
 
     def __enter__(self):
         return self
@@ -98,11 +112,12 @@ results.append(run("empty -> effort=low -> clean -> content",
 
 # 4. 400 拒 extras → clean 最小请求 → 成功
 def check_400(r, c):
-    ok = r.content == "答案" and len(c) == 2 \
-        and "reasoning_effort" not in c[1] and "max_tokens" not in c[1]
+    ok = (r.content == "答案" and len(c) == 3
+          and "reasoning_effort" not in c[2]
+          and "max_tokens" not in c[2])
     return (ok, f"bodies={[(b.get('reasoning_effort'), b.get('max_tokens')) for b in c]}")
 results.append(run("400 on extras -> clean minimal request -> content",
-    [("400", None), ("resp", GOOD)], check_400))
+    [("400", None), ("400", None), ("resp", GOOD)], check_400))
 
 # 5. 全部失败 → 诊断含尝试序列
 def check_diag(r, c):
