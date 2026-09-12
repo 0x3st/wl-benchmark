@@ -132,6 +132,21 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, "") || "/";
 
+    if (request.method === "DELETE" && path.startsWith("/api/runs/")) {
+      const token = (request.headers.get("Authorization") || "")
+        .replace(/^Bearer\s+/i, "");
+      if (!token || token !== env.UPLOAD_TOKEN) {
+        return jsonResp({ ok: false, error: "unauthorized" }, 401);
+      }
+      const id = path.slice("/api/runs/".length);
+      if (!ID_RE.test(id)) {
+        return jsonResp({ ok: false, error: "bad run id" }, 400);
+      }
+      await env.RUNS.delete(`run:${id}`);
+      const runs = (await getIndex(env)).filter(r => r.id !== id);
+      await env.RUNS.put("index", JSON.stringify(runs));
+      return jsonResp({ ok: true, deleted: id });
+    }
     if (request.method === "POST" && path === "/api/runs") {
       return handleUpload(request, env);
     }
