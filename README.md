@@ -229,7 +229,7 @@ run (saved to `config/site.json`, gitignored).
 
 ### Run parameters
 
-Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `max_tokens`, `essay_max_tokens`, `svg_max_tokens`, `scheduling_max_tokens`, `temperature`, `timeout`, `tasks_data_root`. Provider information is never stored there.
+Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `temperature`, `timeout` (seconds per request, default 600), `tasks_data_root`, and the token budgets `max_tokens` / `essay_max_tokens` / `svg_max_tokens` / `scheduling_max_tokens` / `quant_max_tokens`. **By default no token budget is sent** — the model generates until it is done, which is the fair way to measure capability (reasoning models spend tokens thinking first). Set a number only if you must cap cost on a metered API; set `null` (or omit) for self-hosted endpoints. Provider information is never stored there.
 
 ## Security
 

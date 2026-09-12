@@ -88,7 +88,7 @@ def _load_run_cfg(path: str) -> dict:
            "svg_max_tokens": 16384, "scheduling_max_tokens": 4096,
            "scheduling_max_turns": 16, "quant_max_turns": 16,
            "quant_max_tokens": 8192,
-           "temperature": 0.2, "timeout": 300}
+           "temperature": 0.2, "timeout": 600}
     if path and os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             raw = json.load(f)

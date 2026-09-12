@@ -96,6 +96,8 @@ class ChatClient:
         # max_tokens=None/0: omit the parameter entirely — the server
         # then uses its own default (the right choice for self-hosted
         # deployments with no token quota)
+        if max_tokens:
+            body["max_tokens"] = max_tokens
         if temperature is not None:
             body["temperature"] = temperature
         if response_format:

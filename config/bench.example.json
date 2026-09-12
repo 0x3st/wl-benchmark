@@ -3,14 +3,15 @@
   "tasks_data_root": "tasks_data",
   "run": {
     "rubric_modality": "auto",
-    "max_tokens": 2048,
-    "essay_max_tokens": 32768,
-    "svg_max_tokens": 16384,
-    "scheduling_max_tokens": 32768,
+    "max_tokens": null,
+    "essay_max_tokens": null,
+    "svg_max_tokens": null,
+    "scheduling_max_tokens": null,
     "temperature": 0.2,
-    "timeout": 300,
+    "timeout": 600,
     "quant_max_turns": 16,
-    "quant_max_tokens": 8192,
+    "quant_max_tokens": null,
     "parallel_jobs": 3
-  }
+  },
+  "_comment_budget": "max_tokens*: null = 不限制生成（默认，推荐本地部署）。设为数字可限制输出（云 API 控成本用）。"
 }

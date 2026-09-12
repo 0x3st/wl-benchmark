@@ -191,7 +191,7 @@ class EssayTask(BaseTask):
         model_parts += self._rubric_parts_for_model()
 
         res = client.chat(model, [{"role": "user", "content": model_parts}],
-                          max_tokens=self.run_cfg.get("essay_max_tokens", 32768),
+                          max_tokens=self.run_cfg.get("essay_max_tokens"),
                           temperature=self.run_cfg.get("temperature", 0.4))
 
         essay_path = None
