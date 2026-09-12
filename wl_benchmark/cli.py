@@ -147,8 +147,18 @@ def cmd_run(args) -> None:
                     out_dir = f.read().strip()
             except OSError:
                 out_dir = ""
-            if out_dir:
+            # the child is model-adjacent: never trust the path it
+            # hands back — it must live under our out_root and contain
+            # an actual run
+            out_root = os.path.abspath(args.out or "results")
+            if (out_dir
+                    and os.path.abspath(out_dir).startswith(
+                        out_root + os.sep)
+                    and os.path.isfile(os.path.join(out_dir, "results.json"))):
                 _finalize(out_dir, keep=args.keep)
+            elif out_dir:
+                print("[wlb] run dir failed validation — data kept "
+                      f"locally at {out_dir}")
         os.unlink(done_file)
         raise SystemExit(rc)
     _execute(payload)          # no backend (Windows / bwrap missing)

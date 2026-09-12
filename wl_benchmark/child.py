@@ -17,7 +17,7 @@ import sys
 
 def main() -> int:
     from . import tunnel_client
-    tunnel_client.install(os.environ["WL_BENCH_TUNNEL_SOCK"])
+    tunnel_client.install(int(os.environ["WL_BENCH_TUNNEL_SOCK"]))
 
     payload = json.loads(os.environ["WL_BENCH_CHILD"])
     from .runner import run_all

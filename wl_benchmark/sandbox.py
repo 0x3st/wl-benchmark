@@ -5,13 +5,18 @@ benchmark as a child process under a deny-by-default sandbox:
 
   - file writes confined to the run dir, /tmp, cache and the browser's
     own support dirs
-  - ALL network denied; the only egress is a Unix-socket CONNECT proxy
-    run by the parent, whitelisted to the user-chosen endpoint and the
-    results platform
+  - ALL network denied — including Unix-socket connects (a broad
+    unix-socket allow would expose local services like docker.sock).
+    The child's only egress is a control socketpair inherited via
+    pass_fds; each connection request gets back an already-connected
+    TCP socket as a file descriptor (SCM_RIGHTS), whitelisted to the
+    exact (host, port) of the user-chosen endpoint. TLS stays
+    end-to-end — the parent passes the socket, it never relays data.
 
 Backends:
-  darwin  Seatbelt via /usr/bin/sandbox-exec
-  linux   bubblewrap (bwrap, probed before use) with --unshare-net
+  darwin  Seatbelt via /usr/bin/sandbox-exec (fds survive execve)
+  linux   bubblewrap (bwrap, probed before use) with --unshare-net and
+          --pass-fd
   windows not supported (no practical unprivileged sandbox)
 
 When no backend is available the run proceeds unsandboxed.
@@ -26,7 +31,7 @@ import subprocess
 import sys
 import tempfile
 
-from .tunnel import allowed_hosts, Tunnel
+from .tunnel import endpoint_target, Tunnel
 
 MARKER = "WL_BENCH_SANDBOX"
 PAYLOAD = "WL_BENCH_CHILD"
@@ -49,7 +54,6 @@ PROFILE = """(version 1)
     (literal "/dev/stdout")
     (literal "/dev/stderr"))
 (allow process*)
-(allow network-outbound (remote unix-socket))
 (allow signal)
 (allow sysctl*)
 (allow ipc-posix*)
@@ -87,9 +91,11 @@ def _seatbelt_profile(out_root: str) -> str:
     )
 
 
-def _bwrap_cmd(out_root: str, sock_path: str) -> list:
+def _bwrap_cmd(out_root: str, ctrl_fd: int) -> list:
     """bubblewrap: read-only root, writable islands, no network at all
-    (--unshare-net); the tunnel socket is bind-mounted in."""
+    (--unshare-net); the control fd enters via --pass-fd. Read-only
+    binds also make every other Unix socket on the filesystem
+    unconnectable (connect needs write access)."""
     cmd = [
         "bwrap",
         "--ro-bind", "/", "/",
@@ -97,7 +103,7 @@ def _bwrap_cmd(out_root: str, sock_path: str) -> list:
         "--proc", "/proc",
         "--tmpfs", "/tmp",
         "--unshare-net",
-        "--bind", sock_path, sock_path,
+        f"--pass-fd", str(ctrl_fd),
         "--bind", os.path.abspath(out_root), os.path.abspath(out_root),
         "--die-with-parent",
         "--",
@@ -116,15 +122,20 @@ def _bwrap_cmd(out_root: str, sock_path: str) -> list:
 def _bwrap_ok() -> bool:
     """bwrap can exist yet be unusable — e.g. Ubuntu 24.04 restricts
     unprivileged user namespaces via AppArmor. Probe it (with the
-    network namespace we actually use) before committing."""
+    network namespace and fd passing we actually use)."""
+    r, w = os.pipe()
     try:
-        r = subprocess.run(
+        p = subprocess.run(
             ["bwrap", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev",
-             "--proc", "/proc", "--unshare-net", "--", "/bin/true"],
-            capture_output=True, timeout=20)
-        return r.returncode == 0
+             "--proc", "/proc", "--unshare-net", "--pass-fd", str(r),
+             "--", "/bin/sh", "-c", f"test -e /proc/self/fd/{r}"],
+            pass_fds=[r], capture_output=True, timeout=20)
+        return p.returncode == 0
     except Exception:  # noqa: BLE001
         return False
+    finally:
+        os.close(r)
+        os.close(w)
 
 
 def _backend() -> str | None:
@@ -140,26 +151,23 @@ def available() -> bool:
     return _backend() is not None
 
 
-def spawn_sandboxed(payload: dict, out_root: str) -> int:
-    """Run the benchmark child under the sandbox; returns its exit code.
+def spawn_sandboxed_entry(entry: list, out_root: str, allowed: set,
+                          env_extra: dict | None = None) -> int:
+    """Run `entry` under the sandbox; returns its exit code.
 
-    payload: {provider, run_cfg, only_types, out, keep, done_file} —
-    the child runs the tasks and writes the run dir to done_file.
-    Network is endpoint-only (the parent handles the platform upload
-    outside the sandbox).
+    allowed: set of (host, port) targets the child may connect to.
+    The control socketpair fd is passed to the child; its number is in
+    env WL_BENCH_TUNNEL_SOCK.
     """
     backend = _backend()
     out_root = os.path.abspath(out_root)
     os.makedirs(out_root, exist_ok=True)
-    hosts = allowed_hosts(payload["provider"]["base_url"], None)
-    tunnel = Tunnel(hosts)
+    tunnel = Tunnel(allowed)
 
-    child_env = dict(os.environ, **{
+    child_env = dict(os.environ, **(env_extra or {}), **{
         MARKER: "1",
-        PAYLOAD: json.dumps(payload),
-        SOCK_ENV: tunnel.path,
+        SOCK_ENV: str(tunnel.child_fd),
     })
-    entry = [sys.executable, "-u", "-m", "wl_benchmark.child"]
     try:
         if backend == "seatbelt":
             profile = _seatbelt_profile(out_root)
@@ -168,16 +176,33 @@ def spawn_sandboxed(payload: dict, out_root: str) -> int:
                 f.write(profile)
             argv = [SANDBOX_EXEC, "-f", prof_path] + entry
         else:
-            argv = _bwrap_cmd(out_root, tunnel.path) + entry
+            argv = _bwrap_cmd(out_root, tunnel.child_fd) + entry
 
         # the terminal delivers Ctrl+C to the whole foreground group;
         # the child handles it (exit 130) — the parent must not die first
         prev_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            proc = subprocess.Popen(argv, env=child_env)
+            proc = subprocess.Popen(argv, env=child_env,
+                                    pass_fds=[tunnel.child_fd])
             rc = proc.wait()
         finally:
             signal.signal(signal.SIGINT, prev_int)
         return rc if rc >= 0 else 128 - rc
     finally:
         tunnel.close()
+
+
+def spawn_sandboxed(payload: dict, out_root: str) -> int:
+    """Run the benchmark child under the sandbox; returns its exit code.
+
+    payload: {provider, run_cfg, only_types, out, keep, done_file} —
+    the child runs the tasks and writes the run dir to done_file.
+    Network is endpoint-only (exact host+port).
+    """
+    payload = dict(payload)
+    payload.setdefault("done_file", None)
+    allowed = {endpoint_target(payload["provider"]["base_url"])}
+    return spawn_sandboxed_entry(
+        [sys.executable, "-u", "-m", "wl_benchmark.child"],
+        out_root, allowed,
+        env_extra={PAYLOAD: json.dumps(payload)})

@@ -3,14 +3,15 @@
 Run on any machine: `python tools/sandbox_selftest.py`
   --baseline   chrome raster only, no sandbox (sanity baseline)
   no flags     full test: parent spawns a sandboxed child of THIS file
-               via the real spawn machinery (tunnel included)
+               via the real spawn machinery (fd-passing tunnel included)
 
 Checks inside the child: writes outside the run dir denied, writes
-inside allowed, direct TCP denied, tunnel to a local server works,
-tunnel refuses non-whitelisted hosts, Chrome raster works.
+inside allowed, direct TCP/UDP denied, local Unix sockets (docker.sock
+class) denied, tunnel to the exact whitelisted target works, tunnel
+refuses anything else (other port on the same host included), Chrome
+raster works.
 """
 import http.server
-import json
 import os
 import socket
 import sys
@@ -25,6 +26,10 @@ OUT = os.path.join(ROOT, "results-sandbox-selftest")
 os.makedirs(OUT, exist_ok=True)
 
 CHILD = os.environ.get("WL_BENCH_SELFTEST_CHILD") == "1"
+
+SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'"
+       " width='200' height='100'><rect width='200' height='100'"
+       " fill='#eef'/><circle cx='100' cy='50' r='30' fill='#36f'/></svg>")
 
 
 def _local_server() -> int:
@@ -45,17 +50,13 @@ def _local_server() -> int:
 
 if "--baseline" in sys.argv:
     print("baseline mode: chrome raster only, no sandbox")
-    SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'"
-           " width='200' height='100'><rect width='200' height='100'"
-           " fill='#eef'/><circle cx='100' cy='50' r='30' fill='#36f'/></svg>")
-    from wl_benchmark.tasks.svg import svg_to_png
     svg_path = os.path.join(OUT, "selftest.svg")
     png_path = os.path.join(OUT, "selftest.png")
     open(svg_path, "w").write(SVG)
     try:
+        from wl_benchmark.tasks.svg import svg_to_png
         svg_to_png(svg_path, png_path, size=512)
-        print("PASS: chrome raster "
-              f"({os.path.getsize(png_path)} bytes)")
+        print(f"PASS: chrome raster ({os.path.getsize(png_path)} bytes)")
         print("SELFTEST PASSED")
         sys.exit(0)
     except Exception as e:  # noqa: BLE001
@@ -67,8 +68,9 @@ if "--baseline" in sys.argv:
 if CHILD:
     # ---- inside the sandbox child ----------------------------------------
     from wl_benchmark import tunnel_client
-    tunnel_client.install(os.environ[sandbox.SOCK_ENV])
+    tunnel_client.install(int(os.environ[sandbox.SOCK_ENV]))
     port = int(os.environ["WL_BENCH_SELFTEST_PORT"])
+    wrong_port = int(os.environ["WL_BENCH_SELFTEST_WRONG_PORT"])
     fails = []
 
     def check(name, ok):
@@ -110,27 +112,48 @@ if CHILD:
     except OSError:
         check("direct TCP denied", True)
 
-    # the tunnel reaches the whitelisted local server
+    # raw UDP is denied too
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.sendto(b"x", ("93.184.216.34", 53))
+        check("direct UDP denied", False)
+    except OSError:
+        check("direct UDP denied", True)
+
+    # local Unix sockets are denied (docker.sock class — would be a
+    # full host escape if reachable)
+    unix_leak = False
+    for path in ("/var/run/docker.sock", "/private/var/run/docker.sock"):
+        if os.path.exists(path):
+            try:
+                s = socket.socket(socket.AF_UNIX)
+                s.settimeout(3)
+                s.connect(path)
+                unix_leak = True
+            except OSError:
+                pass
+    check("local unix sockets denied (docker.sock class)",
+          not unix_leak)
+
+    # the tunnel reaches the exact whitelisted target
     try:
         import urllib.request
         body = urllib.request.urlopen(
             f"http://127.0.0.1:{port}/", timeout=15).read()
-        check(f"tunnel to whitelisted host ({body!r})", body == b"ok")
+        check(f"tunnel to whitelisted target ({body!r})", body == b"ok")
     except Exception as e:  # noqa: BLE001
-        check(f"tunnel to whitelisted host ({e})", False)
+        check(f"tunnel to whitelisted target ({e})", False)
 
-    # the tunnel refuses non-whitelisted hosts
+    # the tunnel refuses a different port on the same host
     try:
         import urllib.request
-        urllib.request.urlopen("http://192.0.2.1/", timeout=10)
-        check("tunnel refuses non-whitelisted host", False)
-    except Exception as e:  # noqa: BLE001
-        check("tunnel refuses non-whitelisted host", True)
+        urllib.request.urlopen(f"http://127.0.0.1:{wrong_port}/",
+                               timeout=10)
+        check("tunnel refuses non-whitelisted port", False)
+    except Exception:  # noqa: BLE001
+        check("tunnel refuses non-whitelisted port", True)
 
     # the hard part: Chrome rasterization inside the sandbox
-    SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'"
-           " width='200' height='100'><rect width='200' height='100'"
-           " fill='#eef'/><circle cx='100' cy='50' r='30' fill='#36f'/></svg>")
     svg_path = os.path.join(OUT, "selftest.svg")
     png_path = os.path.join(OUT, "selftest.png")
     open(svg_path, "w").write(SVG)
@@ -156,39 +179,16 @@ if not sandbox.available():
 print(f"backend: {sandbox._backend()}")
 
 port = _local_server()
-payload = {"selftest": True}       # not used by the child, kept for shape
-child_env_extra = {
-    "WL_BENCH_SELFTEST_CHILD": "1",
-    "WL_BENCH_SELFTEST_PORT": str(port),
-}
+# a second server on a different port (must be refused by the tunnel)
+wrong_port = _local_server()
 
-# reuse spawn_sandboxed's machinery with a custom child entry
-import tempfile  # noqa: E402
-from wl_benchmark.tunnel import Tunnel  # noqa: E402
-
-backend = sandbox._backend()
-out_root = os.path.abspath(OUT)
-tunnel = Tunnel({"127.0.0.1"})
-child_env = dict(os.environ, **child_env_extra,
-                 **{sandbox.MARKER: "1", sandbox.SOCK_ENV: tunnel.path})
-entry = [sys.executable, "-u", __file__]
-try:
-    if backend == "seatbelt":
-        profile = sandbox._seatbelt_profile(out_root)
-        fd, prof_path = tempfile.mkstemp(suffix=".sb", prefix="wlb-")
-        with os.fdopen(fd, "w") as f:
-            f.write(profile)
-        argv = [sandbox.SANDBOX_EXEC, "-f", prof_path] + entry
-    else:
-        argv = sandbox._bwrap_cmd(out_root, tunnel.path) + entry
-    import signal
-    import subprocess
-    prev = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    try:
-        proc = subprocess.Popen(argv, env=child_env)
-        rc = proc.wait()
-    finally:
-        signal.signal(signal.SIGINT, prev)
-finally:
-    tunnel.close()
-sys.exit(rc if rc >= 0 else 128 - rc)
+rc = sandbox.spawn_sandboxed_entry(
+    [sys.executable, "-u", __file__],
+    OUT,
+    allowed={("127.0.0.1", port)},
+    env_extra={
+        "WL_BENCH_SELFTEST_CHILD": "1",
+        "WL_BENCH_SELFTEST_PORT": str(port),
+        "WL_BENCH_SELFTEST_WRONG_PORT": str(wrong_port),
+    })
+sys.exit(rc)

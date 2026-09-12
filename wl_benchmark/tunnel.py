@@ -1,128 +1,109 @@
-"""Parent-side network tunnel for the sandboxed child.
+"""Parent-side network tunnel for the sandboxed child (fd passing).
 
-The sandbox denies ALL network access; the only egress is this Unix
-socket proxy. The child speaks an HTTP CONNECT protocol over the
-socket; the parent resolves the whitelist (the user-chosen endpoint
-and the results platform), relays raw TCP, and refuses everything
-else. TLS is end-to-end between the child and the real server — the
-tunnel never sees plaintext.
+The sandbox denies ALL network access — including Unix-socket
+connects (a broad unix-socket allow would expose local services such
+as docker.sock). The child instead inherits one end of a socketpair
+via pass_fds; each connection request travels over that control
+channel and the parent passes back an already-connected TCP socket as
+a file descriptor (SCM_RIGHTS). The child never creates a socket,
+never resolves DNS, and talks TLS end-to-end with the real server.
 
-Threat model: model output must not be able to reach the network
-except through the two destinations the operator chose.
+Whitelist: exact (host, port) pairs derived from the user-chosen
+endpoint.
 """
 from __future__ import annotations
 
+import array
 import os
 import socket
-import tempfile
 import threading
 
-
-def _host_of(url: str) -> str:
-    from urllib.parse import urlparse
-    host = urlparse(url).hostname or ""
-    return host.lower().rstrip(".")
+from urllib.parse import urlparse
 
 
-def allowed_hosts(provider_base_url: str, platform_url: str | None) -> set:
-    hosts = {_host_of(provider_base_url)}
-    if platform_url:
-        hosts.add(_host_of(platform_url))
-    return {h for h in hosts if h}
+def endpoint_target(base_url: str) -> tuple:
+    u = urlparse(base_url)
+    host = (u.hostname or "").lower().rstrip(".")
+    port = u.port or (443 if u.scheme == "https" else 80)
+    return host, port
 
 
 class Tunnel:
     def __init__(self, allowed: set):
-        fd, self.path = tempfile.mkstemp(prefix="wlb-tunnel-",
-                                         suffix=".sock")
-        os.close(fd)
-        os.unlink(self.path)          # bind wants a free path
-        self.allowed = {h.lower() for h in allowed if h}
-        self.srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.srv.bind(self.path)
-        self.srv.listen(16)
-        self.srv.settimeout(0.5)
+        """allowed: set of (host, port) tuples (exact matches only).
+        child_fd is a raw int (for pass_fds); the parent serves its end
+        on parent_fd."""
+        self.allowed = {(h.lower().rstrip("."), int(p))
+                        for h, p in allowed if h}
+        a, b = socket.socketpair()
+        self.parent_fd = a.detach()      # raw int; served by the thread
+        self.child_fd = b.detach()       # raw int, passed to the child
         self._alive = True
-        threading.Thread(target=self._accept_loop, daemon=True).start()
+        threading.Thread(target=self._serve, daemon=True).start()
 
     # ------------------------------------------------------------ server
-    def _accept_loop(self) -> None:
-        while self._alive:
-            try:
-                conn, _ = self.srv.accept()
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            threading.Thread(target=self._handle, args=(conn,),
-                             daemon=True).start()
-
-    def _handle(self, conn: socket.socket) -> None:
+    def _serve(self) -> None:
+        # wrap the raw fd; the object keeps ownership until close()
+        self._ctrl = socket.socket(fileno=self.parent_fd)
+        ctrl = self._ctrl
         try:
-            conn.settimeout(30)
             buf = b""
-            while b"\r\n\r\n" not in buf:
-                chunk = conn.recv(4096)
+            while self._alive:
+                chunk = ctrl.recv(4096)
                 if not chunk:
-                    return
+                    break
                 buf += chunk
-                if len(buf) > 8192:
-                    return
-            line = buf.split(b"\r\n")[0].decode(errors="replace")
-            parts = line.split()
-            if len(parts) < 2 or parts[0].upper() != "CONNECT":
-                conn.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
-                return
-            host, _, port = parts[1].partition(":")
-            if host.lower() not in self.allowed:
-                conn.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\n")
-                return
-            try:
-                remote = socket.create_connection(
-                    (host, int(port or "443")), timeout=20)
-            except OSError:
-                conn.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
-                return
-            conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            conn.settimeout(None)
-            _relay(conn, remote)
+                while b"\n" in buf:
+                    line, buf = buf.split(b"\n", 1)
+                    self._handle(ctrl, line.decode(errors="replace"))
         except OSError:
             pass
+
+    def _handle(self, ctrl, line: str) -> None:
+        parts = line.split()
+        if len(parts) != 2 or parts[0] != "CONNECT":
+            self._reply_err(ctrl, "bad request")
+            return
+        host, _, port = parts[1].rpartition(":")
+        try:
+            target = (host.lower().rstrip("."), int(port or "443"))
+        except ValueError:
+            self._reply_err(ctrl, "bad port")
+            return
+        if target not in self.allowed:
+            self._reply_err(ctrl, f"refused {host}:{port}")
+            return
+        try:
+            remote = socket.create_connection(target, timeout=20)
+        except OSError as e:
+            self._reply_err(ctrl, f"unreachable {host}:{port} ({e})")
+            return
+        # create_connection leaves O_NONBLOCK set for the timeout mode;
+        # the child would inherit it and see EAGAIN on every read
+        remote.setblocking(True)
+        # pass the connected socket to the child; the parent closes its
+        # copy — data flows directly between child and server
+        fds = array.array("i", [remote.fileno()])
+        try:
+            ctrl.sendmsg([b"OK\n"], [(socket.SOL_SOCKET,
+                                      socket.SCM_RIGHTS, fds)])
         finally:
-            try:
-                conn.close()
-            except OSError:
-                pass
+            remote.close()
+
+    @staticmethod
+    def _reply_err(ctrl, msg: str) -> None:
+        try:
+            ctrl.sendall(f"ERR {msg}\n".encode()[:200])
+        except OSError:
+            pass
 
     def close(self) -> None:
         self._alive = False
         try:
-            self.srv.close()
+            self._ctrl.close()
         except OSError:
             pass
         try:
-            os.unlink(self.path)
+            os.close(self.child_fd)
         except OSError:
             pass
-
-
-def _relay(a: socket.socket, b: socket.socket) -> None:
-    def pump(src, dst):
-        try:
-            while True:
-                data = src.recv(65536)
-                if not data:
-                    break
-                dst.sendall(data)
-        except OSError:
-            pass
-        finally:
-            try:
-                dst.shutdown(socket.SHUT_WR)
-            except OSError:
-                pass
-
-    t = threading.Thread(target=pump, args=(a, b), daemon=True)
-    t.start()
-    pump(b, a)
-    t.join(timeout=30)
