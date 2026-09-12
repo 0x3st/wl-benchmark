@@ -73,30 +73,74 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
 
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
-    stop_status = threading.Event()
+    # ---- live task table: 8 fixed rows, one per task ------------------
+    # row layout: index · task id · status · elapsed. redrawn in place
+    # (ANSI cursor-up) on every state change and every 5 s.
+    states = {t.task_id: {"s": "pending", "t0": None, "t1": None, "note": ""}
+              for t in tasks}
+    draw_lock = threading.Lock()
+    drew = {"lines": 0}
 
-    def running_line():
-        """One in-place line: shown at launch, refreshed on every task
-        completion and every 30 s (so the elapsed time keeps moving)."""
+    def _fmt_row(i, tid):
+        st = states[tid]
+        if st["s"] == "running":
+            t = f"{(time.time() - st['t0']) / 60:5.1f} min"
+        elif st["t0"] is not None:
+            t = f"{(st['t1'] - st['t0']) / 60:5.1f} min"
+        else:
+            t = "       ·"
+        return (f"  {i + 1}  {tid:<28} {st['s']:<8} {t}  {st['note']}")
+
+    def redraw():
         if not sys.stdout.isatty():
             return
-        mins = (time.time() - t0) / 60
-        with dump_lock:
-            n = len(all_results)
-            n_err = sum(1 for r in all_results if r.get("error"))
-        sys.stdout.write(f"\rrunning  {n}/{len(tasks)} · "
-                         f"{n_err} failed · {mins:.1f} min   ")
-        sys.stdout.flush()
+        with draw_lock:
+            rows = [f"  #   task                          status   time"]
+            rows += [_fmt_row(i, tid) for i, tid in enumerate(states)]
+            up = "" if not drew["lines"] else f"\x1b[{drew['lines']}F"
+            sys.stdout.write(up + "".join("\r\x1b[K" + r for r in rows))
+            sys.stdout.flush()
+            drew["lines"] = len(rows)
+
+    def clear_table():
+        if sys.stdout.isatty() and drew["lines"]:
+            with draw_lock:
+                sys.stdout.write(f"\x1b[{drew['lines']}F\r\x1b[J")
+                sys.stdout.flush()
+                drew["lines"] = 0
+
+    def touch(tid, status, note=""):
+        st = states.get(tid)
+        if st is None:
+            return
+        st["s"] = status
+        now = time.time()
+        if status == "running":
+            st["t0"] = now
+        else:
+            if st["t0"] is None:
+                st["t0"] = now
+            st["t1"] = now
+            st["note"] = note
+        redraw()
+
+    stop_status = threading.Event()
 
     def _status_loop():
-        while not stop_status.wait(30):
-            running_line()
+        while not stop_status.wait(5):
+            redraw()
 
     def report(r):
         with dump_lock:
             all_results.append(r.to_dict())
         dump()
-        running_line()
+        err = str(r.error or "")
+        if not err:
+            touch(r.task_id, "done")
+        elif err.startswith("skipped"):
+            touch(r.task_id, "skip", err.splitlines()[0][:40])
+        else:
+            touch(r.task_id, "fail", err.splitlines()[0][:40])
 
     def run_one(task, snapshot):
         try:
@@ -114,7 +158,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     dump()                  # results.json exists from second zero
 
     interrupted = False
-    running_line()
+    redraw()
     threading.Thread(target=_status_loop, daemon=True).start()
     pool = ThreadPoolExecutor(max_workers=jobs)
     try:
@@ -139,6 +183,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 if all(d in finished for d in deps_of[tid] if d in by_id):
                     # snapshot: the task must not see later context writes
                     snap = dict(context_store)
+                    touch(tid, "running")
                     futures[pool.submit(run_one, t, snap)] = tid
             if not futures:
                 # nothing running and nothing submittable — unsatisfiable
@@ -183,9 +228,8 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 report(r)
 
         stop_status.set()
+        clear_table()
         if not interrupted:
-            if sys.stdout.isatty():
-                sys.stdout.write("\r" + " " * 60 + "\r")
             mins = (time.time() - t0) / 60
             n_err = sum(1 for r in all_results if r.get("error"))
             print(f"done      {len(all_results)}/{len(tasks)} tasks · "
@@ -198,8 +242,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
 
     if interrupted:
         stop_status.set()
-        if sys.stdout.isatty():
-            sys.stdout.write("\r" + " " * 60 + "\r")
+        clear_table()
         print("[runner] interrupted by user — completed results kept "
               f"at {out_dir} (upload later with: wlb --upload {out_dir})",
               flush=True)
