@@ -30,6 +30,14 @@ class ChatResult:
         return self.error is None
 
 
+CONTINUE_PROMPT = (
+    "Your output above was cut off mid-text by a length limit. "
+    "Continue EXACTLY from where it stopped — the next token of the "
+    "same document. Do not repeat anything already written, do not add "
+    "preambles, commentary or explanations. Output only the continuation."
+)
+
+
 class ChatClient:
     """Minimal OpenAI-compatible /v1/chat/completions client.
 
@@ -210,6 +218,63 @@ class ChatClient:
             raw=data,
             reasoning_chars=len(msg.get("reasoning_content") or ""),
         )
+
+
+
+    def chat_long(self, model: str, messages: List[Dict[str, Any]],
+                  max_tokens: Optional[int] = None,
+                  temperature: Optional[float] = None,
+                  max_pieces: int = 8,
+                  deadline: Optional[float] = None) -> ChatResult:
+        """Multi-turn generation: when a response is truncated
+        (finish_reason=length), continue the conversation from the exact
+        stop point and concatenate. Lets long-form tasks complete on
+        deployments whose per-response output cap is smaller than the
+        document — the standard production pattern for long generations.
+
+        deadline: absolute unix time; the loop stops (with what it has)
+        when exceeded. The task-level task_minutes budget feeds this.
+        """
+        import time as _time
+        deadline = _time.time() + 86400 if deadline is None else deadline
+        msgs = list(messages)
+        pieces: List[str] = []
+        usage_acc: Dict[str, int] = {}
+        latencies: List[float] = []
+        reasoning_chars = 0
+        finish = None
+        t0 = _time.time()
+        last_err = None
+        for _ in range(max(1, max_pieces)):
+            if deadline is not None and _time.time() > deadline:
+                break
+            res = self.chat(model, msgs, max_tokens=max_tokens,
+                            temperature=temperature)
+            latencies.append(res.latency)
+            for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                usage_acc[k] = usage_acc.get(k, 0) + \
+                    int((res.usage or {}).get(k, 0) or 0)
+            reasoning_chars += res.reasoning_chars
+            if res.error:
+                last_err = res.error
+                break
+            if res.content:
+                pieces.append(res.content)
+                msgs.append({"role": "assistant", "content": res.content})
+            finish = res.finish_reason
+            if res.finish_reason != "length" or not res.content:
+                break                       # natural end (or nothing yet)
+            if _time.time() > deadline:
+                break
+            msgs.append({"role": "user", "content": CONTINUE_PROMPT})
+        content = "".join(pieces)
+        if not content and last_err:
+            return ChatResult(error=last_err, latency=_time.time() - t0,
+                              reasoning_chars=reasoning_chars)
+        return ChatResult(content=content, finish_reason=finish,
+                          usage=usage_acc, reasoning_chars=reasoning_chars,
+                          latency=_time.time() - t0)
+
 
 
 def parse_judge_json(text: str) -> Optional[Dict[str, Any]]:

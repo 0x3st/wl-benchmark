@@ -24,6 +24,7 @@ import glob
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List, Optional
 
 from .base import BaseTask, TaskResult
@@ -190,9 +191,12 @@ class EssayTask(BaseTask):
             model_parts.append({"type": "text", "text": "\n\n".join(prior)})
         model_parts += self._rubric_parts_for_model()
 
-        res = client.chat(model, [{"role": "user", "content": model_parts}],
-                          max_tokens=self.run_cfg.get("essay_max_tokens"),
-                          temperature=self.run_cfg.get("temperature"))
+        deadline = time.time() + self.run_cfg.get("task_minutes", 30) * 60
+        res = client.chat_long(
+            model, [{"role": "user", "content": model_parts}],
+            max_tokens=self.run_cfg.get("essay_max_tokens"),
+            temperature=self.run_cfg.get("temperature"),
+            deadline=deadline)
 
         essay_path = None
         if res.ok and res.content:

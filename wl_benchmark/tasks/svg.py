@@ -29,6 +29,7 @@ import re
 import xml.etree.ElementTree as ET
 import shutil
 import subprocess
+import time
 import tempfile
 from typing import Any, Dict, List, Optional
 
@@ -292,11 +293,13 @@ class SvgTask(BaseTask):
         instruction = built["instruction"]
         size = int(self.spec.get("size", 1024))
 
-        res = client.chat(
+        deadline = time.time() + self.run_cfg.get("task_minutes", 30) * 60
+        res = client.chat_long(
             model,
             [{"role": "user", "content": f"{instruction}\n\n{QUALITY_NOTE}"}],
             max_tokens=self.run_cfg.get("svg_max_tokens"),
-            temperature=self.run_cfg.get("temperature"))
+            temperature=self.run_cfg.get("temperature"),
+            deadline=deadline)
 
         if not res.ok:
             return TaskResult(task_id=self.task_id, task_type=self.task_type,
