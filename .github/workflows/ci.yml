@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  sandbox-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install bubblewrap + Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+          sudo apt-get install -y ./chrome.deb
+      - name: Sandbox self-test (bwrap + Chrome raster)
+        run: python tools/sandbox_selftest.py
+
+  sandbox-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sandbox self-test (seatbelt + Chrome raster)
+        run: python tools/sandbox_selftest.py
