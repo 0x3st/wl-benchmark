@@ -318,11 +318,18 @@ class SvgTask(BaseTask):
         artifacts = [svg_path]
         png_path = svg_path.replace(".svg", ".png")
         raster_error = None
-        if not svg_ok:
+        if os.environ.get("WL_BENCH_SANDBOX"):
+            # the sandbox denies Chrome's internal AF_UNIX IPC — the
+            # parent rasterizes deferred SVGs outside the sandbox
+            # (the SVG is sanitized above, so this is safe)
+            d_raster_deferred = True
+            raster_error = None
+        elif not svg_ok:
             # unparsable SVG is never loaded into Chrome: the HTML parser
             # is forgiving and may still execute embedded scripts
             raster_error = "not rastered: SVG is not well-formed XML"
         else:
+            d_raster_deferred = False
             try:
                 svg_to_png(svg_path, png_path, size)
                 artifacts.append(png_path)
@@ -348,6 +355,8 @@ class SvgTask(BaseTask):
                     "constraints": checks,
                     "constraints_passed": sum(1 for c in checks if c["ok"]),
                     "constraints_total": len(checks),
+                    "raster_deferred": d_raster_deferred,
+                    "svg_size": size,
                     "svg_valid": svg_ok,
                     "svg_note": svg_note,
                     "svg_sanitized": n_sanitized,

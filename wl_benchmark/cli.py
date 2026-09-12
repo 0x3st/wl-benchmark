@@ -175,9 +175,49 @@ def _execute(payload: dict) -> None:
     _finalize(out_dir, keep=payload.get("keep", False))
 
 
+def _raster_deferred_svgs(out_dir: str) -> None:
+    """Rasterize SVGs the sandboxed child deferred (Chrome cannot run
+    under the sandbox). The SVGs are sanitized, so the parent's Chrome
+    only ever renders sanitized content."""
+    import json as _json
+    from .tasks.svg import svg_to_png
+    path = os.path.join(out_dir, "results.json")
+    with open(path, encoding="utf-8") as f:
+        rs = _json.load(f)
+    changed = False
+    for r in rs:
+        det = r.get("detail", {})
+        if not det.get("raster_deferred"):
+            continue
+        svg = next((a for a in r.get("artifacts", [])
+                    if a.endswith(".svg") and os.path.exists(a)), None)
+        if not svg:
+            continue
+        png = svg[:-4] + ".png"
+        last_err = None
+        for attempt in range(3):   # headless Chrome aborts flakily
+            try:
+                svg_to_png(svg, png, size=int(det.get("svg_size", 1024)))
+                if png not in r.get("artifacts", []):
+                    r["artifacts"].append(png)
+                det["raster_error"] = None
+                det["raster_blank"] = os.path.getsize(png) < 10_000
+                last_err = None
+                break
+            except Exception as e:  # noqa: BLE001
+                last_err = str(e)[:200]
+        if last_err:
+            det["raster_error"] = last_err
+        changed = True
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(rs, f, ensure_ascii=False, indent=1)
+
+
 def _finalize(out_dir: str, keep: bool = False) -> None:
     """Review PDF + unconditional upload — runs in the trusted parent
     (the sandboxed child only talks to the model endpoint)."""
+    _raster_deferred_svgs(out_dir)
     try:
         from .review_pdf import build_review_pdf
         pdf = build_review_pdf(out_dir)

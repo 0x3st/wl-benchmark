@@ -55,6 +55,7 @@ class ChatClient:
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.use_stream = True
         self.max_retries = max_retries
         self.proxy = proxy
         if proxy == "direct":
@@ -117,6 +118,12 @@ class ChatClient:
         if response_format:
             body["response_format"] = response_format
 
+        # streaming keeps bytes flowing during long server-side
+        # reasoning — proxies with idle timeouts (Cloudflare ~100 s)
+        # otherwise drop the connection mid-generation
+        body["stream"] = True
+        body["stream_options"] = {"include_usage": True}
+
         payload = json.dumps(body).encode()
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
@@ -131,8 +138,11 @@ class ChatClient:
                          "Content-Type": "application/json"})
             try:
                 with self._opener.open(req, timeout=self.timeout) as r:
-                    data = json.loads(r.read().decode())
-                res = self._parse(data, time.time() - t0)
+                    if not self.use_stream:
+                        data = json.loads(r.read().decode())
+                        res = self._parse(data, time.time() - t0)
+                    else:
+                        res = self._parse_stream(r, time.time() - t0)
                 last_asked = body.get("max_tokens")
                 if (res.content is None or not res.content.strip()) \
                         and not res.tool_calls:
@@ -192,6 +202,13 @@ class ChatClient:
                 except Exception:
                     pass
                 last_err = f"HTTP {e.code}: {detail}"
+                if e.code == 400 and self.use_stream:
+                    # endpoint does not support streaming — fall back
+                    self.use_stream = False
+                    body.pop("stream", None)
+                    body.pop("stream_options", None)
+                    payload = json.dumps(body).encode()
+                    continue
                 if e.code == 400 and stage < 2:
                     # the server rejected one of our extras (the lifted
                     # max_tokens or the effort param) — fall back to a
@@ -214,6 +231,62 @@ class ChatClient:
         if last_res is not None:
             return last_res        # parsed-but-empty: keep diagnostics
         return ChatResult(error=last_err, latency=time.time() - t0)
+
+    @staticmethod
+    def _parse_stream(r, latency: float) -> ChatResult:
+        """Consume an SSE chat stream, accumulating deltas."""
+        content: List[str] = []
+        reasoning: List[str] = []
+        tool_acc: Dict[int, Dict[str, Any]] = {}
+        finish = None
+        usage: Dict[str, Any] = {}
+        for raw in r:
+            line = raw.decode(errors="replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                d = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if d.get("usage"):
+                usage = d["usage"]
+            choices = d.get("choices") or []
+            if not choices:
+                continue
+            ch = choices[0]
+            delta = ch.get("delta") or {}
+            if delta.get("content"):
+                content.append(delta["content"])
+            if delta.get("reasoning_content"):
+                reasoning.append(delta["reasoning_content"])
+            for tc in delta.get("tool_calls") or []:
+                idx = tc.get("index", 0)
+                acc = tool_acc.setdefault(idx, {
+                    "id": "", "type": "function",
+                    "function": {"name": "", "arguments": ""}})
+                if tc.get("id"):
+                    acc["id"] = tc["id"]
+                fn = tc.get("function") or {}
+                if fn.get("name"):
+                    acc["function"]["name"] = fn["name"]
+                if fn.get("arguments"):
+                    acc["function"]["arguments"] += fn["arguments"]
+            if ch.get("finish_reason"):
+                finish = ch["finish_reason"]
+        tool_calls = [tool_acc[i] for i in sorted(tool_acc)] \
+            if tool_acc else []
+        content_str = "".join(content) or None
+        return ChatResult(
+            content=content_str,
+            tool_calls=tool_calls,
+            finish_reason=finish,
+            usage=usage,
+            latency=latency,
+            reasoning_chars=len("".join(reasoning)),
+        )
 
     @staticmethod
     def _parse(data: Dict[str, Any], latency: float) -> ChatResult:
