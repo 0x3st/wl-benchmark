@@ -15,8 +15,11 @@ import time
 def run_chrome_capture(cmd: list, out_path: str, timeout: float = 60) -> None:
     """Run cmd; succeed once out_path exists and is stable (or the
     process exits cleanly). Raises RuntimeError otherwise."""
+    import tempfile
+    err_file = tempfile.NamedTemporaryFile(prefix="wlb-chrome-err-",
+                                           suffix=".log", delete=False)
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            stderr=err_file)
     deadline = time.time() + timeout
     last_size, last_change = -1, time.time()
     try:
@@ -35,8 +38,18 @@ def run_chrome_capture(cmd: list, out_path: str, timeout: float = 60) -> None:
         # final check after exit / deadline
         if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
             return
+        tail = ""
+        try:
+            with open(err_file.name, "rb") as f:
+                tail = f.read()[-600:].decode(errors="replace") \
+                    .replace("\n", " | ")
+        except OSError:
+            pass
+        status = ('timed out' if proc.poll() is None
+                  else f'exit {proc.returncode}')
         raise RuntimeError(
-            f"chrome capture produced no output ({'timed out' if proc.poll() is None else f'exit {proc.returncode}'})")
+            f"chrome capture produced no output ({status})"
+            + (f": {tail}" if tail else ""))
     finally:
         if proc.poll() is None:
             proc.terminate()

@@ -105,10 +105,27 @@ def _bwrap_cmd(out_root: str) -> list:
     return cmd
 
 
+def _bwrap_ok() -> bool:
+    """bwrap exists on the PATH but can still be unusable — e.g. Ubuntu
+    24.04 restricts unprivileged user namespaces via AppArmor. Probe it
+    before re-exec, or a runtime failure would take the whole run down.
+    """
+    import subprocess
+    try:
+        r = subprocess.run(
+            ["bwrap", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev",
+             "--proc", "/proc", "--", "/bin/true"],
+            capture_output=True, timeout=20)
+        return r.returncode == 0
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _backend() -> str | None:
     if sys.platform == "darwin" and os.path.exists(SANDBOX_EXEC):
         return "seatbelt"
-    if sys.platform.startswith("linux") and shutil.which("bwrap"):
+    if sys.platform.startswith("linux") and shutil.which("bwrap") \
+            and _bwrap_ok():
         return "bwrap"
     return None
 

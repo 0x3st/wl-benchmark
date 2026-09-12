@@ -19,6 +19,10 @@ jobs:
           sudo apt-get install -y bubblewrap
           wget -q -O chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
           sudo apt-get install -y ./chrome.deb
+      - name: Allow unprivileged user namespaces (Ubuntu 24.04 AppArmor)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Baseline: Chrome outside the sandbox
+        run: google-chrome --headless=new --disable-gpu --no-sandbox --user-data-dir=/tmp/ci-ud --screenshot=/tmp/ci-shot.png --window-size=300,300 about:blank && ls -la /tmp/ci-shot.png
       - name: Sandbox self-test (bwrap + Chrome raster)
         run: python tools/sandbox_selftest.py
 
@@ -29,5 +33,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Baseline: Chrome version + unsandboxed screenshot
+        run: |
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --no-sandbox --user-data-dir=/tmp/ci-ud --screenshot=/tmp/ci-shot.png --window-size=300,300 about:blank
+          ls -la /tmp/ci-shot.png
       - name: Sandbox self-test (seatbelt + Chrome raster)
         run: python tools/sandbox_selftest.py
