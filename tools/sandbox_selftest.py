@@ -21,7 +21,11 @@ os.makedirs(OUT, exist_ok=True)
 
 from wl_benchmark import sandbox  # noqa: E402
 
-if not sandbox.in_sandbox():
+BASELINE = "--baseline" in sys.argv
+
+if BASELINE:
+    print("baseline mode: chrome raster only, no sandbox")
+elif not sandbox.in_sandbox():
     backend = sandbox._backend()
     print(f"backend: {backend}")
     if backend is None:
@@ -30,8 +34,11 @@ if not sandbox.in_sandbox():
     sandbox.maybe_reexec(OUT)      # execs; never returns
     raise SystemExit("re-exec failed")   # pragma: no cover
 
-# ---- we are inside the sandbox now -------------------------------------
+# ---- (baseline) or (inside the sandbox) -------------------------------
 fails = []
+if BASELINE:
+    for name in [n for n in ("write-denial", "read", "network")]:
+        pass    # confinement checks are meaningless unsandboxed
 
 
 def check(name, ok):
@@ -40,41 +47,43 @@ def check(name, ok):
         fails.append(name)
 
 
-# writes inside the run dir are allowed
-try:
-    open(os.path.join(OUT, "ok.txt"), "w").write("x")
-    check("write inside run dir", True)
-except OSError as e:
-    check(f"write inside run dir ({e})", False)
-
-# writes outside are denied (seatbelt: EPERM; bwrap: EROFS)
-import errno
-for victim in (os.path.expanduser("~/wlb-evil.txt"), "/etc/wlb-evil.conf"):
+if not BASELINE:
+    # writes inside the run dir are allowed
     try:
-        open(victim, "w").write("evil")
-        os.unlink(victim)
-        check(f"write denied: {victim}", False)
+        open(os.path.join(OUT, "ok.txt"), "w").write("x")
+        check("write inside run dir", True)
     except OSError as e:
-        denied = e.errno in (errno.EPERM, errno.EACCES, errno.EROFS)
-        check(f"write denied: {victim} ({errno.errorcode.get(e.errno, '?')})",
-              denied)
+        check(f"write inside run dir ({e})", False)
 
-# reads anywhere are allowed
-try:
-    open("/etc/hosts").read()[:1]
-    check("read /etc allowed", True)
-except OSError:
-    check("read /etc allowed", False)
+    # writes outside are denied (seatbelt: EPERM; bwrap: EROFS)
+    import errno
+    for victim in (os.path.expanduser("~/wlb-evil.txt"),
+                   "/etc/wlb-evil.conf"):
+        try:
+            open(victim, "w").write("evil")
+            os.unlink(victim)
+            check(f"write denied: {victim}", False)
+        except OSError as e:
+            denied = e.errno in (errno.EPERM, errno.EACCES, errno.EROFS)
+            check(f"write denied: {victim} "
+                  f"({errno.errorcode.get(e.errno, '?')})", denied)
 
-# network is open
-try:
-    import urllib.request
-    req = urllib.request.Request("https://pypi.org",
-                                 headers={"User-Agent": "wl-benchmark"})
-    urllib.request.urlopen(req, timeout=15).read(1)
-    check("outbound network", True)
-except Exception as e:  # noqa: BLE001
-    check(f"outbound network ({e})", False)
+    # reads anywhere are allowed
+    try:
+        open("/etc/hosts").read()[:1]
+        check("read /etc allowed", True)
+    except OSError:
+        check("read /etc allowed", False)
+
+    # network is open
+    try:
+        import urllib.request
+        req = urllib.request.Request("https://pypi.org",
+                                     headers={"User-Agent": "wl-benchmark"})
+        urllib.request.urlopen(req, timeout=15).read(1)
+        check("outbound network", True)
+    except Exception as e:  # noqa: BLE001
+        check(f"outbound network ({e})", False)
 
 # ---- the hard part: Chrome rasterization inside the sandbox ------------
 SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'"

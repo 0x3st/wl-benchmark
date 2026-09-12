@@ -23,11 +23,9 @@ jobs:
           sudo apt-get install -y ./chrome.deb
       - name: Allow unprivileged user namespaces (Ubuntu 24.04 AppArmor)
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: "Baseline: Chrome outside the sandbox"
+      - name: "Baseline: Chrome raster outside the sandbox"
         timeout-minutes: 3
-        run: |
-          google-chrome --headless=new --disable-gpu --no-sandbox --virtual-time-budget=10000 --user-data-dir=/tmp/ci-ud --screenshot=/tmp/ci-shot.png --window-size=300,300 about:blank
-          ls -la /tmp/ci-shot.png
+        run: python tools/sandbox_selftest.py --baseline
       - name: "Sandbox self-test (bwrap + Chrome raster)"
         timeout-minutes: 6
         run: python tools/sandbox_selftest.py
@@ -40,12 +38,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: "Baseline: Chrome version + unsandboxed screenshot"
+      - name: "Baseline: Chrome raster outside the sandbox"
         timeout-minutes: 3
         run: |
           "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
-          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --no-sandbox --virtual-time-budget=10000 --user-data-dir=/tmp/ci-ud --screenshot=/tmp/ci-shot.png --window-size=300,300 about:blank
-          ls -la /tmp/ci-shot.png
+          python tools/sandbox_selftest.py --baseline
       - name: "Sandbox self-test (seatbelt + Chrome raster)"
         timeout-minutes: 6
         run: python tools/sandbox_selftest.py

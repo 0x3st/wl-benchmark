@@ -267,6 +267,7 @@ def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
              "--force-device-scale-factor=1",
              f"--user-data-dir={user_data}",
              "--no-sandbox", "--disable-crashpad",
+             "--disable-crash-reporter",
              f"--screenshot={png_path}", f"--window-size={size},{size}",
              "--default-background-color=FFFFFF", "file://" + html],
             png_path, timeout=60)

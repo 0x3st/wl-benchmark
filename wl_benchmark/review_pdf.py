@@ -292,6 +292,7 @@ def build_review_pdf(run_dir: str, out_path: Optional[str] = None) -> str:
         run_chrome_capture(
             [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
              "--no-sandbox", "--disable-crashpad",
+             "--disable-crash-reporter",
              f"--user-data-dir={user_data}",
              f"--print-to-pdf={os.path.abspath(out_path)}",
              "file://" + os.path.abspath(tmp)],
