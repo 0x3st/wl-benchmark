@@ -286,12 +286,17 @@ def build_review_pdf(run_dir: str, out_path: Optional[str] = None) -> str:
                                      encoding="utf-8") as f:
         f.write(html_doc)
         tmp = f.name
+    user_data = tempfile.mkdtemp(prefix="wlb-chrome-pdf-")
     try:
-        subprocess.run(
+        from .chrome_capture import run_chrome_capture
+        run_chrome_capture(
             [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+             "--no-sandbox", "--disable-crashpad",
+             f"--user-data-dir={user_data}",
              f"--print-to-pdf={os.path.abspath(out_path)}",
              "file://" + os.path.abspath(tmp)],
-            check=True, capture_output=True, timeout=120)
+            os.path.abspath(out_path), timeout=120)
     finally:
         os.remove(tmp)
+        shutil.rmtree(user_data, ignore_errors=True)
     return out_path

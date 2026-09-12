@@ -29,6 +29,7 @@ import re
 import xml.etree.ElementTree as ET
 import shutil
 import subprocess
+import tempfile
 from typing import Any, Dict, List, Optional
 
 from .base import BaseTask, TaskResult
@@ -256,12 +257,21 @@ def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
         with open(html, "w", encoding="utf-8") as f:
             f.write(f'<body style="margin:0;background:#fff">'
                     f'<div style="width:{size}px;height:{size}px">{svg}</div>')
-        subprocess.run(
-            [chrome, "--headless", "--disable-gpu", "--force-device-scale-factor=1",
+        user_data = tempfile.mkdtemp(prefix="wlb-chrome-")
+        # --no-sandbox: Chrome's own seatbelt cannot nest inside the wlb
+        # outer sandbox; the outer profile + SVG sanitization cover the
+        # renderer instead.
+        from ..chrome_capture import run_chrome_capture
+        run_chrome_capture(
+            [chrome, "--headless=new", "--disable-gpu",
+             "--force-device-scale-factor=1",
+             f"--user-data-dir={user_data}",
+             "--no-sandbox", "--disable-crashpad",
              f"--screenshot={png_path}", f"--window-size={size},{size}",
              "--default-background-color=FFFFFF", "file://" + html],
-            check=True, capture_output=True, timeout=60)
+            png_path, timeout=60)
         os.remove(html)
+        shutil.rmtree(user_data, ignore_errors=True)
         return png_path
     raise RuntimeError("no rsvg-convert or Chrome found for SVG rasterization")
 

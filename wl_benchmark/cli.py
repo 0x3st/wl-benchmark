@@ -18,6 +18,7 @@ import urllib.request
 
 from .publisher import (cleanup_run, load_site_config, prompt_site_config,
                         publish_run)
+from . import sandbox
 from .selfupdate import check_background, maybe_upgrade
 from .reporter import write_report
 from .review_pdf import build_review_pdf
@@ -115,12 +116,17 @@ def _ask_parallel(run_cfg: dict, args) -> None:
 def cmd_run(args) -> None:
     interactive = sys.stdin.isatty()
 
-    # FIRST thing: is there a newer release? (background lookup, capped
-    # wait — offline/slow network must not block the flow)
-    if interactive:
-        update_th, update_box = check_background()
-        update_th.join(timeout=2.5)
-        maybe_upgrade(update_box[0], interactive=interactive)
+    if sandbox.in_sandbox():
+        pass    # update was already checked before entering the sandbox
+    else:
+        # FIRST thing: is there a newer release? (background lookup,
+        # capped wait; an upgrade must run OUTSIDE the sandbox, where
+        # brew/pipx can write to the installation)
+        if interactive:
+            update_th, update_box = check_background()
+            update_th.join(timeout=2.5)
+            maybe_upgrade(update_box[0], interactive=interactive)
+        sandbox.maybe_reexec(args.out or "results")
 
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(DEFAULT_CONFIG)

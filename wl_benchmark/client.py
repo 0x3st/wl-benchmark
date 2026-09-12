@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 @dataclass
 class ChatResult:
     content: Optional[str] = None
+    reasoning_chars: int = 0
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
     finish_reason: Optional[str] = None
     usage: Dict[str, Any] = field(default_factory=dict)
@@ -101,6 +102,7 @@ class ChatClient:
 
         payload = json.dumps(body).encode()
         last_err: Optional[str] = None
+        last_res: Optional[ChatResult] = None
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -111,7 +113,23 @@ class ChatClient:
             try:
                 with self._opener.open(req, timeout=self.timeout) as r:
                     data = json.loads(r.read().decode())
-                return self._parse(data, time.time() - t0)
+                res = self._parse(data, time.time() - t0)
+                if (res.content is None or not res.content.strip()) \
+                        and not res.tool_calls:
+                    # reasoning models can burn the whole budget thinking
+                    # and return an empty content — surface it, never
+                    # silently score an empty answer
+                    usage = res.usage or {}
+                    res.error = (
+                        f"empty content (finish_reason={res.finish_reason}, "
+                        f"completion_tokens={usage.get('completion_tokens')}, "
+                        f"reasoning≈{res.reasoning_chars} chars)")
+                    last_err = res.error
+                    last_res = res
+                    if res.finish_reason == "length":
+                        break   # deterministic burn-out; a retry would too
+                else:
+                    return res
             except urllib.error.HTTPError as e:
                 detail = ""
                 try:
@@ -125,6 +143,8 @@ class ChatClient:
                 last_err = f"{type(e).__name__}: {e}"
             time.sleep(2 * (attempt + 1))
 
+        if last_res is not None:
+            return last_res        # parsed-but-empty: keep diagnostics
         return ChatResult(error=last_err, latency=time.time() - t0)
 
     @staticmethod
@@ -141,6 +161,7 @@ class ChatClient:
             usage=data.get("usage", {}),
             latency=latency,
             raw=data,
+            reasoning_chars=len(msg.get("reasoning_content") or ""),
         )
 
 
