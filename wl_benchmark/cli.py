@@ -128,52 +128,48 @@ def cmd_run(args) -> None:
     out_dir = run_all(provider, run_cfg,
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
-    summary = write_report(out_dir)
-    print(f"[cli] summary -> {summary}")
+    write_report(out_dir)
     _maybe_publish(out_dir, keep=args.keep, skip=args.no_upload)
 
 
 def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None:
-    """Ask before uploading (nothing is sent automatically). On success
-    print the share link and wipe the local data; on decline keep
-    everything locally (`wlb publish <run-dir>` uploads later)."""
-    run_id = os.path.basename(run_dir.rstrip("/"))
+    """The single upload prompt at the end of a run. On confirmation:
+    upload, print one share line, wipe local data. On decline: keep
+    everything locally (`wlb --upload <run-dir>` sends it later)."""
     if skip:
-        print(f"[cli] upload skipped (--no-upload); local data kept at {run_dir}")
+        print(f"results kept at {run_dir} (--no-upload)")
         return
     n = len(json.load(open(os.path.join(run_dir, "results.json"))))
-    print(f"\n[cli] run complete: {n} task results in {run_dir}")
     if not sys.stdin.isatty():
-        print("[cli] non-interactive session — upload skipped; local data kept")
-        print(f"      upload later with: wlb publish {run_dir}")
+        print(f"results kept at {run_dir} — non-interactive session; "
+              f"upload later with: wlb --upload {run_dir}")
         return
-    ans = input("Upload results to the benchmark platform now? [Y/n] ").strip().lower()
+    try:
+        ans = input(f"Upload {n} results to the benchmark platform now? "
+                    f"[Y/n] ").strip().lower()
+    except EOFError:
+        ans = "n"
     if ans in ("n", "no"):
-        print(f"[cli] local data kept at {run_dir}")
-        print(f"      upload later with: wlb --upload {run_dir}")
+        print(f"results kept — upload later with: wlb --upload {run_dir}")
         return
     cfg = load_site_config()
     if cfg is None:
         cfg = prompt_site_config()
     if cfg is None:
-        print(f"[cli] site upload not configured — local data kept at {run_dir}")
-        print("      (set WL_BENCH_URL / WL_BENCH_TOKEN, or delete the")
-        print("       run dir manually)")
+        print(f"results kept at {run_dir} — configure "
+              f"WL_BENCH_URL / WL_BENCH_TOKEN to upload")
         return
     try:
         url = publish_run(run_dir, cfg)
     except Exception as e:  # noqa: BLE001
-        print(f"[cli] UPLOAD FAILED — local data kept at {run_dir}")
-        print(f"      {e}")
-        print("      retry later with: wlb publish " + run_dir)
+        print(f"upload FAILED — local data kept at {run_dir}")
+        print(f"  {e}")
+        print(f"  retry later with: wlb --upload {run_dir}")
         return
-    print(f"[cli] published -> {url}")
-    print(f"[cli] share link: {url}")
+    deleted = cleanup_run(run_dir) if not keep else False
+    print(f"share  {url}" + ("  (local data deleted)" if deleted else ""))
     if keep:
-        print(f"[cli] local data kept (--keep): {run_dir}")
-    elif cleanup_run(run_dir):
-        print(f"[cli] local run data deleted: {run_dir}")
-
+        print(f"local  {run_dir}")
 
 
 def do_upload(run_dir: str, keep: bool = False) -> None:
@@ -187,14 +183,14 @@ def do_upload(run_dir: str, keep: bool = False) -> None:
     try:
         url = publish_run(run_dir, cfg)
     except Exception as e:  # noqa: BLE001
-        print(f"[upload] FAILED — local data kept at {run_dir}")
-        print(f"         {e}")
+        print(f"upload FAILED — local data kept at {run_dir}")
+        print(f"  {e}")
         raise SystemExit(1)
-    print(f"[cli] share link: {url}")
+    print(f"share  {url}")
     if keep:
-        print(f"[cli] local data kept: {run_dir}")
+        print(f"local  {run_dir}")
     elif cleanup_run(run_dir):
-        print(f"[cli] local run data deleted: {run_dir}")
+        print("local run data deleted")
 
 
 def do_report(run_dir: str) -> None:
