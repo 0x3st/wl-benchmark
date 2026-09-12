@@ -114,6 +114,7 @@ class ChatClient:
         last_res: Optional[ChatResult] = None
         no_thinking = False      # "thinking" param tried and rejected?
         boosted = False          # token budget already doubled?
+        escalations: list = []   # what we tried, for the final message
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -141,6 +142,7 @@ class ChatClient:
                     if res.finish_reason == "length":
                         if not no_thinking:
                             no_thinking = True
+                            escalations.append("retry with thinking disabled")
                             body["thinking"] = {"type": "disabled"}
                             if max_tokens:
                                 body["max_tokens"] = max_tokens * 2
@@ -148,10 +150,34 @@ class ChatClient:
                             continue
                         if not boosted and max_tokens:
                             boosted = True
+                            escalations.append("retry with doubled budget")
                             body["max_tokens"] = max_tokens * 2
                             payload = json.dumps(body).encode()
                             continue
-                        break   # still burning out — give up with the diag
+                        # still empty: explain exactly what happened
+                        server_cap = usage.get("completion_tokens")
+                        asked = body.get("max_tokens")
+                        clamped = (isinstance(server_cap, int)
+                                   and asked and server_cap < asked)
+                        res.error = (
+                            "empty content: the model spent its whole "
+                            f"output on reasoning ({res.reasoning_chars} "
+                            "chars) and hit the output limit"
+                            + (f" — the server clamped generation at "
+                               f"{server_cap} tokens though we requested "
+                               f"{asked}" if clamped else
+                               f" (finish_reason=length, "
+                               f"completion_tokens={server_cap})")
+                            + (f"; tried: {'; '.join(escalations)}"
+                               if escalations else "")
+                            + " — the server ignored the thinking-disable "
+                              "parameter; this deployment cannot fit a "
+                              "long reasoning phase and the answer in "
+                              "its output limit. Try another model or "
+                              "deployment.")
+                        last_err = res.error
+                        last_res = res
+                        break
                     continue    # finish_reason=stop: transient, plain retry
                 else:
                     return res
