@@ -121,6 +121,7 @@ class ChatClient:
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
         escalations: list = []   # what was tried, for the final message
+        stage = 0                # escalation ladder position
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -132,50 +133,52 @@ class ChatClient:
                 with self._opener.open(req, timeout=self.timeout) as r:
                     data = json.loads(r.read().decode())
                 res = self._parse(data, time.time() - t0)
+                last_asked = body.get("max_tokens")
                 if (res.content is None or not res.content.strip()) \
                         and not res.tool_calls:
-                    # Reasoning models can burn the whole budget thinking
-                    # and return an empty content. Escalate instead of
-                    # scoring an empty answer: retry with thinking
-                    # disabled (GLM-style param) and a doubled budget.
+                    # Reasoning models can burn the whole output budget
+                    # on thinking and return an empty content. Escalation
+                    # ladder (thinking stays ON throughout):
+                    #   stage 0: as configured (max_tokens lifted to 65536)
+                    #   stage 1: + reasoning_effort=low (shortens thinking)
+                    #   stage 2: clean minimal request (server defaults)
+                    # Each stage is tried once; on exhaustion the error
+                    # carries the full history.
                     usage = res.usage or {}
-                    res.error = (
-                        f"empty content (finish_reason={res.finish_reason}, "
-                        f"completion_tokens={usage.get('completion_tokens')}, "
-                        f"reasoning≈{res.reasoning_chars} chars)")
-                    last_err = res.error
-                    last_res = res
-                    if res.finish_reason == "length":
-                        # thinking stays ON by default. But when the
-                        # reasoning burn eats the whole output budget,
-                        # escalate ONCE with reasoning_effort=low — the
-                        # model then answers directly (verified live:
-                        # glm-5.3-flash reasoning 17.5k chars -> 0).
-                        if "reasoning_effort" not in body:
+                    if res.finish_reason == "length" and stage < 2:
+                        stage += 1
+                        if stage == 1:
                             escalations.append("reasoning_effort=low")
                             body["reasoning_effort"] = "low"
-                            payload = json.dumps(body).encode()
-                            continue
+                        else:
+                            escalations.append(
+                                "clean request with server defaults")
+                            body.pop("reasoning_effort", None)
+                            if body.get("max_tokens") \
+                                    == self.DEFAULT_MAX_TOKENS:
+                                body.pop("max_tokens", None)
+                        payload = json.dumps(body).encode()
+                        continue
+                    if res.finish_reason == "length":
                         server_cap = usage.get("completion_tokens")
-                        asked = body.get("max_tokens")
                         clamped = (isinstance(server_cap, int)
-                                   and asked and server_cap < asked)
+                                   and last_asked
+                                   and server_cap < last_asked)
                         res.error = (
                             "empty content: the model spent its whole "
-                            f"output budget on reasoning ({res.reasoning_chars} "
+                            f"output on reasoning ({res.reasoning_chars} "
                             "chars) and hit the output limit"
                             + (f" — the server clamped generation at "
                                f"{server_cap} tokens though we requested "
-                               f"{asked}" if clamped else
+                               f"{last_asked}" if clamped else
                                f" (finish_reason=length, "
                                f"completion_tokens={server_cap})")
                             + (f"; tried: {'; '.join(escalations)}"
                                if escalations else "")
-                            + ". The deployment's max output must be "
-                              "raised (GLM-5.3 supports far more than "
-                              "this) or a deployment without the cap "
-                              "used — reasoning must stay on, it is the "
-                              "capability being measured.")
+                            + ". The deployment's context window is too "
+                              "small for this task (long reasoning + long "
+                              "answer); use a deployment with a larger "
+                              "context, or a model that reasons less.")
                         last_err = res.error
                         last_res = res
                         break
@@ -189,22 +192,17 @@ class ChatClient:
                 except Exception:
                     pass
                 last_err = f"HTTP {e.code}: {detail}"
-                if e.code == 400 and "thinking" in body:
-                    # endpoint rejects the thinking param — drop it and
-                    # retry with the (already boosted) budget
-                    body.pop("thinking", None)
-                    payload = json.dumps(body).encode()
-                    continue
-                if e.code == 400 and "reasoning_effort" in body:
+                if e.code == 400 and stage < 2:
+                    # the server rejected one of our extras (the lifted
+                    # max_tokens or the effort param) — fall back to a
+                    # clean minimal request
+                    stage = 2
+                    escalations.append(
+                        "clean request with server defaults (HTTP 400)")
                     body.pop("reasoning_effort", None)
-                    payload = json.dumps(body).encode()
-                    continue
-                if e.code == 400 and "max_tokens" in body \
-                        and body["max_tokens"] == self.DEFAULT_MAX_TOKENS:
-                    escalations.append("max_tokens dropped to server default")
-                    # server caps output below our lift — retry with its
-                    # own default instead
-                    body.pop("max_tokens", None)
+                    body.pop("thinking", None)
+                    if body.get("max_tokens") == self.DEFAULT_MAX_TOKENS:
+                        body.pop("max_tokens", None)
                     payload = json.dumps(body).encode()
                     continue
                 if e.code not in self.RETRYABLE:
