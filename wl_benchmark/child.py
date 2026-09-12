@@ -16,6 +16,14 @@ import sys
 
 
 def main() -> int:
+    try:
+        return _run()
+    except KeyboardInterrupt:
+        # the runner already dumped what finished; leave quietly
+        return 130
+
+
+def _run() -> int:
     from . import tunnel_client
     tunnel_client.install(int(os.environ["WL_BENCH_TUNNEL_SOCK"]))
 

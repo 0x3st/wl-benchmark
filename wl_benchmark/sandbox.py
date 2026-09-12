@@ -183,13 +183,33 @@ def spawn_sandboxed_entry(entry: list, out_root: str, allowed: set,
             stdin_arg = os.dup(tunnel.child_fd)
             pass_fds = []
 
-        # the terminal delivers Ctrl+C to the whole foreground group;
-        # the child handles it (exit 130) — the parent must not die first
-        prev_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        # The terminal delivers Ctrl+C to the whole foreground group; the
+        # child handles it (exit 130) and the parent must not die first.
+        # A no-op HANDLER (not SIG_IGN): handlers reset to SIG_DFL on
+        # exec, while an ignored disposition is INHERITED — which would
+        # make the sandboxed child deaf to Ctrl+C too.
+        proc = None
+        hits = {"n": 0}
+
+        def on_int(*_):
+            hits["n"] += 1
+            if proc is None:
+                return
+            if hits["n"] == 2:      # child did not react — terminate it
+                proc.terminate()
+            elif hits["n"] >= 3:
+                proc.kill()
+
+        prev_int = signal.signal(signal.SIGINT, on_int)
         try:
             proc = subprocess.Popen(argv, env=child_env, stdin=stdin_arg,
                                     pass_fds=pass_fds)
-            rc = proc.wait()
+            while True:
+                try:
+                    rc = proc.wait()
+                    break
+                except KeyboardInterrupt:   # racing handler; keep waiting
+                    continue
         finally:
             signal.signal(signal.SIGINT, prev_int)
             if stdin_arg is not None:
