@@ -25,6 +25,30 @@ VARIANTS = {
         "--default-background-color=FFFFFF", "--user-data-dir=" + os.path.join(d, "udE"),
         "--screenshot=" + os.path.join(d, "e.png"), "--window-size=512,512", "about:blank"],
 }
+# F: the real svg_to_png function (what the pipeline uses)
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from wl_benchmark.tasks.svg import svg_to_png
+    from wl_benchmark.chrome_capture import run_chrome_capture
+    orig = run_chrome_capture
+    def spy(cmd, out_path, timeout=60):
+        print("REAL-CMD:", " ".join(cmd), flush=True)
+        return orig(cmd, out_path, timeout)
+    import wl_benchmark.chrome_capture as cc
+    cc.run_chrome_capture = spy
+    fsvg = os.path.join(d, "real.svg")
+    open(fsvg, "w").write(SVG)
+    fpng = os.path.join(d, "real.png")
+    try:
+        svg_to_png(fsvg, fpng, size=512)
+        print(f"{'PASS' if os.path.getsize(fpng) > 100 else 'FAIL'} "
+              f"F real svg_to_png: {os.path.getsize(fpng)} bytes")
+    except Exception as e:
+        print("FAIL F real svg_to_png:", str(e)[:150])
+except Exception as e:
+    print("FAIL F setup:", str(e)[:150])
+
 for name, cmd in VARIANTS.items():
     png = cmd[cmd.index([a for a in cmd if a.startswith("--screenshot=")][0])].split("=", 1)[1]
     p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
