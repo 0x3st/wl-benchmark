@@ -143,6 +143,43 @@ def validate_svg(svg: str) -> tuple[bool, str, str]:
     return False, svg, f"invalid XML: {err}"
 
 
+def sanitize_svg(svg: str) -> tuple[str, int]:
+    """Strip executable content from an SVG before it is saved/rastered.
+
+    The model's SVG is loaded into headless Chrome (and later downloaded
+    from the platform and opened in browsers), so anything scriptable is
+    removed: <script>/<foreignObject>/<iframe>/<embed>/<object>
+    elements, on* event-handler attributes, and javascript:/external
+    href references. Returns (svg, n_removed).
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg, 0
+    drop = {"script", "foreignobject", "iframe", "embed", "object"}
+    parent = {c: p for p in root.iter() for c in p}
+    removed = 0
+    for el in list(root.iter()):
+        if not isinstance(el.tag, str):
+            continue
+        tag = el.tag.split("}")[-1].lower()
+        if tag in drop and el in parent and el in parent[el]:
+            parent[el].remove(el)
+            removed += 1
+            continue
+        for attr in list(el.attrib):
+            val = el.attrib[attr] or ""
+            if attr.lower().startswith("on") \
+                    or val.strip().lower().startswith("javascript:") \
+                    or (attr.lower().endswith("href")
+                        and val.strip().lower().startswith(("http:", "https:", "file:"))):
+                del el.attrib[attr]
+                removed += 1
+    if removed:
+        svg = ET.tostring(root, encoding="unicode")
+    return svg, removed
+
+
 def svg_checks(svg: str, stage: str, picks: Dict[str, str]) -> List[dict]:
     """Machine-checkable structural constraints on the SVG reply.
 
@@ -254,17 +291,23 @@ class SvgTask(BaseTask):
         svg_path = os.path.join(self.artifacts_dir, f"{self.task_id}__{model}.svg")
         svg_raw = extract_svg(res.content or "")
         svg_ok, svg_fixed, svg_note = validate_svg(svg_raw)
+        svg_fixed, n_sanitized = sanitize_svg(svg_fixed)
         with open(svg_path, "w", encoding="utf-8") as f:
             f.write(svg_fixed)
 
         artifacts = [svg_path]
         png_path = svg_path.replace(".svg", ".png")
         raster_error = None
-        try:
-            svg_to_png(svg_path, png_path, size)
-            artifacts.append(png_path)
-        except Exception as e:  # noqa: BLE001
-            raster_error = str(e)
+        if not svg_ok:
+            # unparsable SVG is never loaded into Chrome: the HTML parser
+            # is forgiving and may still execute embedded scripts
+            raster_error = "not rastered: SVG is not well-formed XML"
+        else:
+            try:
+                svg_to_png(svg_path, png_path, size)
+                artifacts.append(png_path)
+            except Exception as e:  # noqa: BLE001
+                raster_error = str(e)
 
         checks = svg_checks(svg_fixed,
                             self.spec.get("stage", "riding"),
@@ -287,6 +330,7 @@ class SvgTask(BaseTask):
                     "constraints_total": len(checks),
                     "svg_valid": svg_ok,
                     "svg_note": svg_note,
+                    "svg_sanitized": n_sanitized,
                     "raster_blank": (raster_error is None and
                                      os.path.exists(png_path) and
                                      size >= 1024 and
