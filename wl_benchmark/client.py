@@ -120,6 +120,7 @@ class ChatClient:
         payload = json.dumps(body).encode()
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
+        escalations: list = []   # what was tried, for the final message
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -145,9 +146,16 @@ class ChatClient:
                     last_err = res.error
                     last_res = res
                     if res.finish_reason == "length":
-                        # thinking stays ON — disabling it would score
-                        # the model without its core capability. The fix
-                        # belongs to the deployment: raise the output cap.
+                        # thinking stays ON by default. But when the
+                        # reasoning burn eats the whole output budget,
+                        # escalate ONCE with reasoning_effort=low — the
+                        # model then answers directly (verified live:
+                        # glm-5.3-flash reasoning 17.5k chars -> 0).
+                        if "reasoning_effort" not in body:
+                            escalations.append("reasoning_effort=low")
+                            body["reasoning_effort"] = "low"
+                            payload = json.dumps(body).encode()
+                            continue
                         server_cap = usage.get("completion_tokens")
                         asked = body.get("max_tokens")
                         clamped = (isinstance(server_cap, int)
@@ -161,6 +169,8 @@ class ChatClient:
                                f"{asked}" if clamped else
                                f" (finish_reason=length, "
                                f"completion_tokens={server_cap})")
+                            + (f"; tried: {'; '.join(escalations)}"
+                               if escalations else "")
                             + ". The deployment's max output must be "
                               "raised (GLM-5.3 supports far more than "
                               "this) or a deployment without the cap "
@@ -185,8 +195,13 @@ class ChatClient:
                     body.pop("thinking", None)
                     payload = json.dumps(body).encode()
                     continue
+                if e.code == 400 and "reasoning_effort" in body:
+                    body.pop("reasoning_effort", None)
+                    payload = json.dumps(body).encode()
+                    continue
                 if e.code == 400 and "max_tokens" in body \
                         and body["max_tokens"] == self.DEFAULT_MAX_TOKENS:
+                    escalations.append("max_tokens dropped to server default")
                     # server caps output below our lift — retry with its
                     # own default instead
                     body.pop("max_tokens", None)

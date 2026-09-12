@@ -105,7 +105,7 @@ def _cons_table(cons: list) -> str:
             f"</tr>{rows}</table>")
 
 
-def _quant_section(r: dict) -> str:
+def _quant_section(r: dict, run_dir: str) -> str:
     d = r.get("detail", {})
     auto, rows = d.get("auto_score"), d.get("per_question", [])
     h = ""
@@ -222,7 +222,7 @@ def build_run_page(results: list, run_id: str, run_dir: str = "") -> str:
                             f"download='{r['task_id']}.svg'>"
                             f"download the .svg source</a></p>")
         elif ttype == "quant":
-            body.append(_quant_section(r))
+            body.append(_quant_section(r, run_dir))
         elif ttype == "scheduling":
             body.append(_sched_section(r))
         else:
