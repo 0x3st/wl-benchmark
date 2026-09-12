@@ -89,17 +89,21 @@ if not BASELINE:
 SVG = ("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100'"
        " width='200' height='100'><rect width='200' height='100'"
        " fill='#eef'/><circle cx='100' cy='50' r='30' fill='#36f'/></svg>")
-svg_path = os.path.join(OUT, "selftest.svg")
-png_path = os.path.join(OUT, "selftest.png")
-open(svg_path, "w").write(SVG)
-try:
-    from wl_benchmark.tasks.svg import svg_to_png
-    svg_to_png(svg_path, png_path, size=512)
-    check(f"chrome raster "
-          f"({os.path.getsize(png_path)} bytes)",
-          os.path.getsize(png_path) > 1000)
-except Exception as e:  # noqa: BLE001
-    check(f"chrome raster ({e})", False)
+import tempfile
+for label, svg_path, png_path in (
+        ("workdir", os.path.join(OUT, "selftest.svg"),
+         os.path.join(OUT, "selftest.png")),
+        ("/tmp", os.path.join(tempfile.gettempdir(), "wlb-selftest.svg"),
+         os.path.join(tempfile.gettempdir(), "wlb-selftest.png"))):
+    open(svg_path, "w").write(SVG)
+    try:
+        from wl_benchmark.tasks.svg import svg_to_png
+        svg_to_png(svg_path, png_path, size=512)
+        check(f"chrome raster ({label}, "
+              f"{os.path.getsize(png_path)} bytes)",
+              os.path.getsize(png_path) > 1000)
+    except Exception as e:  # noqa: BLE001
+        check(f"chrome raster ({label}): {str(e)[:120]}", False)
 
 if fails:
     print("SELFTEST FAILED: " + ", ".join(fails))
