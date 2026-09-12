@@ -204,9 +204,20 @@ def build_run_page(results: list, run_id: str, run_dir: str = "") -> str:
                         + "</b></p>")
             body.append(_cons_table(d.get("constraints", [])))
             body.append(_img_artifact(r))
+            if d.get("raster_blank"):
+                body.append("<p style='color:#82071d'>⚠ the rendered PNG is "
+                            "blank — the model's SVG likely failed to parse; "
+                            "download the .svg source below to inspect it."
+                            "</p>")
             if d.get("raster_error"):
                 body.append(f"<p class='meta'>raster error: "
                             f"{html.escape(d['raster_error'])}</p>")
+            svg_file = next((a for a in r.get("artifacts", [])
+                             if a.endswith(".svg") and os.path.exists(a)), None)
+            if svg_file:
+                body.append(f"<p><a href='{_b64(svg_file, 'image/svg+xml')}' "
+                            f"download='{r['task_id']}.svg'>"
+                            f"download the .svg source</a></p>")
         elif ttype == "quant":
             body.append(_quant_section(r))
         elif ttype == "scheduling":

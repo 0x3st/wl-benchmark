@@ -26,6 +26,7 @@ import json
 import os
 import random
 import re
+import xml.etree.ElementTree as ET
 import shutil
 import subprocess
 from typing import Any, Dict, List, Optional
@@ -112,6 +113,34 @@ def extract_svg(text: str) -> str:
     if m:
         return m.group(0).rstrip() + "\n</svg>"
     return ""
+
+
+def validate_svg(svg: str) -> tuple[bool, str, str]:
+    """Parse the SVG as XML; on failure attempt cheap repairs.
+
+    Returns (ok, repaired_svg, note). Common model breakages: bare '&'
+    in text, missing xmlns, stray control characters.
+    """
+    def parse(s):
+        try:
+            ET.fromstring(s)
+            return True, ""
+        except ET.ParseError as e:
+            return False, str(e)
+
+    ok, err = parse(svg)
+    if ok:
+        return True, svg, ""
+    repaired = svg
+    if 'xmlns=' not in repaired.split(">", 1)[0]:
+        repaired = repaired.replace(
+            "<svg", '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+    repaired = re.sub(r"&(?!amp;|lt;|gt;|quot;|apos;|#)", "&amp;", repaired)
+    repaired = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", repaired)
+    ok2, err2 = parse(repaired)
+    if ok2:
+        return True, repaired, f"auto-repaired: {err}"
+    return False, svg, f"invalid XML: {err}"
 
 
 def svg_checks(svg: str, stage: str, picks: Dict[str, str]) -> List[dict]:
@@ -223,8 +252,10 @@ class SvgTask(BaseTask):
 
         os.makedirs(self.artifacts_dir, exist_ok=True)
         svg_path = os.path.join(self.artifacts_dir, f"{self.task_id}__{model}.svg")
+        svg_raw = extract_svg(res.content or "")
+        svg_ok, svg_fixed, svg_note = validate_svg(svg_raw)
         with open(svg_path, "w", encoding="utf-8") as f:
-            f.write(extract_svg(res.content or ""))
+            f.write(svg_fixed)
 
         artifacts = [svg_path]
         png_path = svg_path.replace(".svg", ".png")
@@ -235,9 +266,15 @@ class SvgTask(BaseTask):
         except Exception as e:  # noqa: BLE001
             raster_error = str(e)
 
-        checks = svg_checks(extract_svg(res.content or ""),
+        checks = svg_checks(svg_fixed,
                             self.spec.get("stage", "riding"),
                             built["picks"])
+        if not svg_ok:
+            checks.insert(1, {"constraint": "parses as XML", "ok": False,
+                              "detail": svg_note})
+        elif svg_note:
+            checks.insert(1, {"constraint": "parses as XML", "ok": True,
+                              "detail": svg_note})
         return TaskResult(
             task_id=self.task_id, task_type=self.task_type,
             model=model, provider=getattr(client, "label", "?"),
@@ -248,6 +285,12 @@ class SvgTask(BaseTask):
                     "constraints": checks,
                     "constraints_passed": sum(1 for c in checks if c["ok"]),
                     "constraints_total": len(checks),
+                    "svg_valid": svg_ok,
+                    "svg_note": svg_note,
+                    "raster_blank": (raster_error is None and
+                                     os.path.exists(png_path) and
+                                     size >= 1024 and
+                                     os.path.getsize(png_path) < 10_000),
                     "svg_bytes": os.path.getsize(svg_path),
                     "raster_error": raster_error},
             artifacts=artifacts,
