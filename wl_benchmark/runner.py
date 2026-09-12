@@ -73,15 +73,24 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
 
     jobs = max(1, int(run_cfg.get("parallel_jobs", 3)))
 
+    stop_status = threading.Event()
+
     def running_line():
-        """One in-place line, rewritten only when a task completes."""
+        """One in-place line: shown at launch, refreshed on every task
+        completion and every 30 s (so the elapsed time keeps moving)."""
         if not sys.stdout.isatty():
             return
         mins = (time.time() - t0) / 60
-        n_err = sum(1 for r in all_results if r.get("error"))
-        sys.stdout.write(f"\rrunning  {len(all_results)}/{len(tasks)} · "
+        with dump_lock:
+            n = len(all_results)
+            n_err = sum(1 for r in all_results if r.get("error"))
+        sys.stdout.write(f"\rrunning  {n}/{len(tasks)} · "
                          f"{n_err} failed · {mins:.1f} min   ")
         sys.stdout.flush()
+
+    def _status_loop():
+        while not stop_status.wait(30):
+            running_line()
 
     def report(r):
         with dump_lock:
@@ -105,6 +114,8 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
     dump()                  # results.json exists from second zero
 
     interrupted = False
+    running_line()
+    threading.Thread(target=_status_loop, daemon=True).start()
     pool = ThreadPoolExecutor(max_workers=jobs)
     try:
         futures = {}          # future -> task_id
@@ -171,18 +182,22 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                     context_store[tid] = r
                 report(r)
 
+        stop_status.set()
         if not interrupted:
+            if sys.stdout.isatty():
+                sys.stdout.write("\r" + " " * 60 + "\r")
             mins = (time.time() - t0) / 60
             n_err = sum(1 for r in all_results if r.get("error"))
             print(f"done      {len(all_results)}/{len(tasks)} tasks · "
                   f"{n_err} failed · {mins:.1f} min\n")
     finally:
-        pass
+        stop_status.set()
         # on Ctrl+C: drop the queue, do NOT wait for in-flight API calls —
         # the incremental dump already persisted every finished result
         pool.shutdown(wait=interrupted is False, cancel_futures=interrupted)
 
     if interrupted:
+        stop_status.set()
         if sys.stdout.isatty():
             sys.stdout.write("\r" + " " * 60 + "\r")
         print("[runner] interrupted by user — completed results kept "
