@@ -268,6 +268,9 @@ def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
              f"--user-data-dir={user_data}",
              "--no-sandbox", "--disable-crashpad",
              "--disable-crash-reporter",
+             # on some headless environments (CI runners) Chrome never
+             # renders the capture without a virtual time budget
+             "--virtual-time-budget=2000",
              f"--screenshot={png_path}", f"--window-size={size},{size}",
              "--default-background-color=FFFFFF", "file://" + html],
             png_path, timeout=60)
