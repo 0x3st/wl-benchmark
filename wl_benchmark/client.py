@@ -128,6 +128,7 @@ class ChatClient:
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
         escalations: list = []   # what was tried, for the final message
+        attempt_low = False      # reasoning_effort=low already tried?
         stage = 0                # escalation ladder position
 
         for attempt in range(self.max_retries):
@@ -155,32 +156,33 @@ class ChatClient:
                     # Each stage is tried once; on exhaustion the error
                     # carries the full history.
                     usage = res.usage or {}
-                    if res.finish_reason == "length" and stage < 2:
-                        stage += 1
-                        if stage == 1:
+                    if res.finish_reason == "length":
+                        # Escalation ladder (thinking stays ON):
+                        #   1. reasoning_effort=low (budget kept)
+                        #   2. drop the lifted budget -> server default
+                        #   3. give up with full diagnostics
+                        if not attempt_low:
+                            attempt_low = True
                             escalations.append("reasoning_effort=low")
                             body["reasoning_effort"] = "low"
-                        else:
-                            escalations.append(
-                                "clean request with server defaults")
-                            body.pop("reasoning_effort", None)
-                            if body.get("max_tokens") \
-                                    == self.DEFAULT_MAX_TOKENS:
-                                body.pop("max_tokens", None)
-                        payload = json.dumps(body).encode()
-                        continue
-                    if res.finish_reason == "length":
+                            payload = json.dumps(body).encode()
+                            continue
+                        if body.get("max_tokens") == self.DEFAULT_MAX_TOKENS:
+                            escalations.append("server-default budget")
+                            body.pop("max_tokens", None)
+                            payload = json.dumps(body).encode()
+                            continue
                         server_cap = usage.get("completion_tokens")
                         clamped = (isinstance(server_cap, int)
-                                   and last_asked
-                                   and server_cap < last_asked)
+                                   and body.get("max_tokens")
+                                   and server_cap < body["max_tokens"])
                         res.error = (
                             "empty content: the model spent its whole "
                             f"output on reasoning ({res.reasoning_chars} "
                             "chars) and hit the output limit"
                             + (f" — the server clamped generation at "
                                f"{server_cap} tokens though we requested "
-                               f"{last_asked}" if clamped else
+                               f"{body.get('max_tokens')}" if clamped else
                                f" (finish_reason=length, "
                                f"completion_tokens={server_cap})")
                             + (f"; tried: {'; '.join(escalations)}"
@@ -202,24 +204,12 @@ class ChatClient:
                 except Exception:
                     pass
                 last_err = f"HTTP {e.code}: {detail}"
-                if e.code == 400 and self.use_stream:
-                    # endpoint does not support streaming — fall back
-                    self.use_stream = False
-                    body.pop("stream", None)
-                    body.pop("stream_options", None)
-                    payload = json.dumps(body).encode()
-                    continue
-                if e.code == 400 and stage < 2:
-                    # the server rejected one of our extras (the lifted
-                    # max_tokens or the effort param) — fall back to a
-                    # clean minimal request
-                    stage = 2
-                    escalations.append(
-                        "clean request with server defaults (HTTP 400)")
-                    body.pop("reasoning_effort", None)
-                    body.pop("thinking", None)
-                    if body.get("max_tokens") == self.DEFAULT_MAX_TOKENS:
-                        body.pop("max_tokens", None)
+                if e.code == 400 and body.get("max_tokens") \
+                        == self.DEFAULT_MAX_TOKENS:
+                    # the server rejected the lifted budget — fall back
+                    # to its default, keeping effort=low
+                    escalations.append("server-default budget (HTTP 400)")
+                    body.pop("max_tokens", None)
                     payload = json.dumps(body).encode()
                     continue
                 if e.code not in self.RETRYABLE:

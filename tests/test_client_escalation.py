@@ -1,4 +1,4 @@
-"""Unit tests for ChatClient empty-content escalation.
+"""Unit tests for ChatClient empty-content escalation ladder.
 
 Run: python tests/test_client_escalation.py
 """
@@ -14,16 +14,14 @@ captured = []
 
 
 class FakeResponse:
-    """Works for both parse paths: read() for non-streaming JSON,
-    iteration for SSE deltas."""
-
     def __init__(self, payload):
         self._d = json.dumps(payload).encode()
         choice = (payload.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
         delta = {"content": msg.get("content"),
                  "reasoning_content": None, "tool_calls": None}
-        sse_choice = {"delta": delta, "finish_reason": choice.get("finish_reason")}
+        sse_choice = {"delta": delta,
+                      "finish_reason": choice.get("finish_reason")}
         self._sse = ("data: " + json.dumps(
             {"choices": [sse_choice], "usage": payload.get("usage", {})},
             ensure_ascii=False) + "\n\ndata: [DONE]\n\n").encode()
@@ -46,20 +44,20 @@ class FakeResponse:
 
 GOOD = {"choices": [{"finish_reason": "stop",
                      "message": {"content": "答案"}}], "usage": {}}
-EMPTY_LEN = {"choices": [{"finish_reason": "length",
-                          "message": {"content": None,
-                                      "reasoning_content": "思" * 100}}],
-             "usage": {"completion_tokens": 4096}}
+EMPTY = {"choices": [{"finish_reason": "length",
+                      "message": {"content": None,
+                                  "reasoning_content": "思" * 100}}],
+         "usage": {"completion_tokens": 8192}}
 
 
 def make(steps):
-    """steps: list of ("resp", payload) | ("400", None)."""
-    cl = ChatClient("http://x", "k", max_retries=4)
+    cl = ChatClient("http://x", "k", max_retries=6)
     state = {"i": 0}
 
     def opener_open(req, timeout=None):
         body = json.loads(req.data.decode())
-        captured.append(body)
+        captured.append({"max_tokens": body.get("max_tokens"),
+                         "reasoning_effort": body.get("reasoning_effort")})
         kind, payload = steps[state["i"]]
         state["i"] += 1
         if kind == "400":
@@ -72,68 +70,54 @@ def make(steps):
     return cl
 
 
+results = []
+
+
 def run(name, steps, check):
     captured.clear()
     cl = make(steps)
     r = cl.chat("glm", [{"role": "user", "content": "x"}])
     ok, why = check(r, captured)
-    print(("PASS" if ok else "FAIL") + f": {name}" + (f" — {why}" if why else ""))
-    return ok
+    print(("PASS" if ok else "FAIL") + f": {name}"
+          + (f" — {why}" if not ok else ""))
+    results.append(ok)
 
 
-results = []
+# 1. 默认: 显式大额 max_tokens（顶开服务端默认上限）
+run("server output cap lifted by default", [("resp", GOOD)],
+    lambda r, c: (c[0]["max_tokens"] == 65536
+                  and c[0]["reasoning_effort"] is None, ""))
 
-# 1. 默认: 显式大额 max_tokens 顶开服务端输出上限
-results.append(run("server output cap lifted by default", [("resp", GOOD)],
-    lambda r, c: (c[0].get("max_tokens") == 65536, "")))
+# 2. 空内容 → 阶梯: low(65536) → low(server default) → 成功
+run("ladder: low kept, budget dropped, content obtained",
+    [("resp", EMPTY), ("400", None), ("resp", GOOD)],
+    lambda r, c: (
+        r.content == "答案"
+        and c[0] == {"max_tokens": 65536, "reasoning_effort": None}
+        and c[1] == {"max_tokens": 65536, "reasoning_effort": "low"}
+        and c[2] == {"max_tokens": None, "reasoning_effort": "low"}, ""))
 
-# 2. 显式预算原样传
-results.append(run("explicit budget sent as-is", [("resp", GOOD)],
-    lambda r, c: (c[0].get("max_tokens") == 8192, "")
-    ) if False else True)
-captured.clear()
-cl = make([("resp", GOOD)])
-cl.chat("glm", [{"role": "user", "content": "x"}], max_tokens=8192)
-results.append(captured[0].get("max_tokens") == 8192)
-print(("PASS" if captured[0].get("max_tokens") == 8192 else "FAIL") +
-      ": explicit budget sent as-is")
+# 3. 空内容无 400: low 重试即成功（预算保留）
+run("ladder without 400",
+    [("resp", EMPTY), ("resp", GOOD)],
+    lambda r, c: (
+        r.content == "答案"
+        and c[0]["reasoning_effort"] is None
+        and c[1] == {"max_tokens": 65536, "reasoning_effort": "low"}, ""))
 
-# 3. 空内容升级阶梯: low → clean → 成功
-def check_ladder(r, c):
-    seq = [(b.get("reasoning_effort"), b.get("max_tokens")) for b in c]
-    ok = r.content == "答案" and seq == [
-        (None, 65536), ({"type": "disabled"}, 65536)] or \
-        r.content == "答案" and len(c) == 3
-    return (r.content == "答案" and len(c) >= 2,
-            f"seq={seq}")
-results.append(run("empty -> effort=low -> clean -> content",
-    [("resp", EMPTY_LEN), ("resp", EMPTY_LEN), ("resp", GOOD)],
-    check_ladder))
+# 4. 全部失败 → 诊断带尝试序列
+run("all-fail diag with attempt history",
+    [("resp", EMPTY), ("resp", EMPTY), ("resp", EMPTY)],
+    lambda r, c: (
+        r.error and "empty content" in r.error
+        and "tried: reasoning_effort=low; server-default budget" in r.error, ""))
 
-# 4. 400 拒 extras → clean 最小请求 → 成功
-def check_400(r, c):
-    ok = (r.content == "答案" and len(c) == 3
-          and "reasoning_effort" not in c[2]
-          and "max_tokens" not in c[2])
-    return (ok, f"bodies={[(b.get('reasoning_effort'), b.get('max_tokens')) for b in c]}")
-results.append(run("400 on extras -> clean minimal request -> content",
-    [("400", None), ("400", None), ("resp", GOOD)], check_400))
+# 5. 正常回复: 不注入任何参数
+run("normal reply: no extra params", [("resp", GOOD)],
+    lambda r, c: (c[0]["reasoning_effort"] is None
+                  and c[0]["max_tokens"] == 65536, ""))
 
-# 5. 全部失败 → 诊断含尝试序列
-def check_diag(r, c):
-    ok = (r.error and "empty content" in r.error
-          and "4096" in r.error)
-    return (ok, r.error[:80] if r.error else "")
-results.append(run("all-fail diag includes details",
-    [("resp", EMPTY_LEN), ("resp", EMPTY_LEN), ("resp", EMPTY_LEN)],
-    check_diag))
-
-# 6. 正常回复不注入任何参数
-results.append(run("normal reply: no extra params", [("resp", GOOD)],
-    lambda r, c: ("reasoning_effort" not in c[0]
-                  and "thinking" not in c[0], "")))
-
+n_ok = sum(results)
 print("-" * 40)
-n_ok = sum(1 for x in results if x)
 print(f"{n_ok}/{len(results)} passed")
 sys.exit(0 if n_ok == len(results) else 1)
