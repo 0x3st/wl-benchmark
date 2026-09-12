@@ -114,19 +114,26 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 sys.stdout.flush()
                 drew["lines"] = 0
 
-    def touch(tid, status, note=""):
-        st = states.get(tid)
-        if st is None:
-            return
-        st["s"] = status
-        now = time.time()
-        if status == "running":
-            st["t0"] = now
-        else:
-            if st["t0"] is None:
+    def set_state(tid, status, note=""):
+        """State change without redraw — worker threads call this so a
+        starting task never renders before the main thread has marked
+        the finished one done (no transient over-counted frames)."""
+        with draw_lock:
+            st = states.get(tid)
+            if st is None:
+                return
+            st["s"] = status
+            now = time.time()
+            if status == "running":
                 st["t0"] = now
-            st["t1"] = now
-            st["note"] = note
+            else:
+                if st["t0"] is None:
+                    st["t0"] = now
+                st["t1"] = now
+                st["note"] = note
+
+    def touch(tid, status, note=""):
+        set_state(tid, status, note)
         redraw()
 
     stop_status = threading.Event()
@@ -141,13 +148,16 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
         dump()
         err = str(r.error or "")
         if not err:
-            touch(r.task_id, "done")
+            set_state(r.task_id, "done")
         elif err.startswith("skipped"):
-            touch(r.task_id, "skip", err.splitlines()[0][:40])
+            set_state(r.task_id, "skip", err.splitlines()[0][:40])
         else:
-            touch(r.task_id, "fail", err.splitlines()[0][:40])
+            set_state(r.task_id, "fail", err.splitlines()[0][:40])
+        # no redraw here — the caller redraws once per batch so a frame
+        # never shows a half-processed set of completions
 
     def run_one(task, snapshot):
+        set_state(task.task_id, "running")   # actual start, not queueing
         try:
             return task.run(client, model, context=snapshot)
         except Exception as e:  # noqa: BLE001
@@ -188,7 +198,6 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 if all(d in finished for d in deps_of[tid] if d in by_id):
                     # snapshot: the task must not see later context writes
                     snap = dict(context_store)
-                    touch(tid, "running")
                     futures[pool.submit(run_one, t, snap)] = tid
             if not futures:
                 # nothing running and nothing submittable — unsatisfiable
@@ -208,6 +217,8 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                         failed.add(t.task_id)
                         report(r)
                 continue
+            time.sleep(0.15)   # let pool workers pick up the submissions
+            redraw()           # pick up states the workers just set
             try:
                 done_futs, _ = wait(list(futures),
                                     return_when=FIRST_COMPLETED)
@@ -231,6 +242,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
                 else:
                     context_store[tid] = r
                 report(r)
+            redraw()   # one frame for the whole batch of completions
 
         stop_status.set()
         clear_table()
