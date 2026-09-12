@@ -116,26 +116,65 @@ def _ask_parallel(run_cfg: dict, args) -> None:
 def cmd_run(args) -> None:
     interactive = sys.stdin.isatty()
 
-    if sandbox.in_sandbox():
-        pass    # update was already checked before entering the sandbox
-    else:
-        # FIRST thing: is there a newer release? (background lookup,
-        # capped wait; an upgrade must run OUTSIDE the sandbox, where
-        # brew/pipx can write to the installation)
-        if interactive:
-            update_th, update_box = check_background()
-            update_th.join(timeout=2.5)
-            maybe_upgrade(update_box[0], interactive=interactive)
-        sandbox.maybe_reexec(args.out or "results")
+    # FIRST thing: is there a newer release? (background lookup, capped
+    # wait; an upgrade must run OUTSIDE the sandbox, where brew/pipx
+    # can write to the installation)
+    if interactive:
+        update_th, update_box = check_background()
+        update_th.join(timeout=2.5)
+        maybe_upgrade(update_box[0], interactive=interactive)
 
     provider = _prompt_provider(args)
     run_cfg = _load_run_cfg(DEFAULT_CONFIG)
     _ask_parallel(run_cfg, args)
+
+    payload = {
+        "provider": provider,
+        "run_cfg": run_cfg,
+        "only_types": args.tasks.split(",") if args.tasks else None,
+        "out": args.out,
+        "keep": args.keep,
+    }
+    if sandbox.available():
+        import tempfile
+        fd, done_file = tempfile.mkstemp(prefix="wlb-done-", suffix=".txt")
+        os.close(fd)
+        payload["done_file"] = done_file
+        rc = sandbox.spawn_sandboxed(payload, args.out or "results")
+        if rc == 0:
+            try:
+                with open(done_file, encoding="utf-8") as f:
+                    out_dir = f.read().strip()
+            except OSError:
+                out_dir = ""
+            if out_dir:
+                _finalize(out_dir, keep=args.keep)
+        os.unlink(done_file)
+        raise SystemExit(rc)
+    _execute(payload)          # no backend (Windows / bwrap missing)
+
+
+def _execute(payload: dict) -> None:
+    """The whole run in-process (no sandbox backend available)."""
+    provider = payload["provider"]
+    run_cfg = payload["run_cfg"]
     out_dir = run_all(provider, run_cfg,
-                      only_types=args.tasks.split(",") if args.tasks else None,
-                      out_root=args.out)
+                      only_types=payload.get("only_types"),
+                      out_root=payload.get("out"), review=False)
     write_report(out_dir)
-    _publish_results(out_dir, keep=args.keep)
+    _finalize(out_dir, keep=payload.get("keep", False))
+
+
+def _finalize(out_dir: str, keep: bool = False) -> None:
+    """Review PDF + unconditional upload — runs in the trusted parent
+    (the sandboxed child only talks to the model endpoint)."""
+    try:
+        from .review_pdf import build_review_pdf
+        pdf = build_review_pdf(out_dir)
+        print(f"review  {pdf}")
+    except Exception as e:  # noqa: BLE001
+        print(f"review  skipped ({e})")
+    _publish_results(out_dir, keep=keep)
 
 
 def _publish_results(run_dir: str, keep: bool = False) -> None:

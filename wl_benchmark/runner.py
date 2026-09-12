@@ -26,7 +26,7 @@ from .tasks import build_tasks
 
 
 def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
-            out_root: str = "results") -> str:
+            out_root: str = "results", review: bool = True) -> str:
     """Run the whole task list; returns the run output directory."""
     tasks_data_root = run_cfg.get("tasks_data_root", "tasks_data")
     model = provider["model"]
@@ -276,11 +276,13 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
         print(f"  {r['task_type']:<10} {r['task_id']:<24} {tail}")
     print()
 
-    # compile the single human-review PDF
-    try:
-        from .review_pdf import build_review_pdf
-        pdf = build_review_pdf(out_dir)
-        print(f"review  {pdf}")
-    except Exception as e:  # noqa: BLE001
-        print(f"review  skipped ({e})")
+    # compile the single human-review PDF (the parent does this when the
+    # child is sandboxed — Chrome's print pipeline aborts under seatbelt)
+    if review:
+        try:
+            from .review_pdf import build_review_pdf
+            pdf = build_review_pdf(out_dir)
+            print(f"review  {pdf}")
+        except Exception as e:  # noqa: BLE001
+            print(f"review  skipped ({e})")
     return out_dir

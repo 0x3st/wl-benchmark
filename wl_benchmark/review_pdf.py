@@ -293,7 +293,7 @@ def build_review_pdf(run_dir: str, out_path: Optional[str] = None) -> str:
     try:
         from .chrome_capture import run_chrome_capture
         run_chrome_capture(
-            [chrome, "--headless", "--disable-gpu", "--no-pdf-header-footer",
+            [chrome, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
              "--no-sandbox", "--disable-crashpad",
              "--disable-crash-reporter",
              f"--user-data-dir={user_data}",

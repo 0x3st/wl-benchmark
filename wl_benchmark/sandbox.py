@@ -1,29 +1,36 @@
-"""OS-level sandbox for the benchmark run.
+"""OS-level sandbox for the benchmark run, network included.
 
-The whole `wlb` process re-executes itself inside a sandbox with
-deny-by-default semantics: file writes are confined to the run output
-directory, the temp dir, the cache dir and the browser's own support
-dirs; network stays open (the endpoint is user-chosen at prompt time).
-Combined with the SVG content sanitizer this contains the only places
-where model output is handled.
+Architecture: the CLI (parent) prompts for everything, then spawns the
+benchmark as a child process under a deny-by-default sandbox:
+
+  - file writes confined to the run dir, /tmp, cache and the browser's
+    own support dirs
+  - ALL network denied; the only egress is a Unix-socket CONNECT proxy
+    run by the parent, whitelisted to the user-chosen endpoint and the
+    results platform
 
 Backends:
   darwin  Seatbelt via /usr/bin/sandbox-exec
-  linux   bubblewrap (bwrap) if installed — read-only root bind with
-          selected writable paths
-  windows not supported (no practical unprivileged sandbox); the run
-          proceeds unsandboxed
+  linux   bubblewrap (bwrap, probed before use) with --unshare-net
+  windows not supported (no practical unprivileged sandbox)
 
-When no backend is available the run silently proceeds unsandboxed.
+When no backend is available the run proceeds unsandboxed.
 """
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import signal
+import subprocess
 import sys
 import tempfile
 
+from .tunnel import allowed_hosts, Tunnel
+
 MARKER = "WL_BENCH_SANDBOX"
+PAYLOAD = "WL_BENCH_CHILD"
+SOCK_ENV = "WL_BENCH_TUNNEL_SOCK"
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 
 PROFILE = """(version 1)
@@ -42,8 +49,7 @@ PROFILE = """(version 1)
     (literal "/dev/stdout")
     (literal "/dev/stderr"))
 (allow process*)
-(allow network*)
-(allow mach*)
+(allow network-outbound (remote unix-socket))
 (allow signal)
 (allow sysctl*)
 (allow ipc-posix*)
@@ -81,15 +87,17 @@ def _seatbelt_profile(out_root: str) -> str:
     )
 
 
-def _bwrap_cmd(out_root: str) -> list:
-    """bubblewrap command line: everything read-only, writable islands."""
+def _bwrap_cmd(out_root: str, sock_path: str) -> list:
+    """bubblewrap: read-only root, writable islands, no network at all
+    (--unshare-net); the tunnel socket is bind-mounted in."""
     cmd = [
         "bwrap",
         "--ro-bind", "/", "/",
         "--dev-bind", "/dev", "/dev",
         "--proc", "/proc",
         "--tmpfs", "/tmp",
-        "--bind", "/run", "/run",
+        "--unshare-net",
+        "--bind", sock_path, sock_path,
         "--bind", os.path.abspath(out_root), os.path.abspath(out_root),
         "--die-with-parent",
         "--",
@@ -97,24 +105,22 @@ def _bwrap_cmd(out_root: str) -> list:
     home = os.path.expanduser("~")
     cache = os.path.abspath(os.environ.get(
         "XDG_CACHE_HOME", os.path.join(home, ".cache")))
-    # the temp dir python uses (TMPDIR may point outside /tmp)
     tmpdir = tempfile.gettempdir()
     for path in [cache, tmpdir] + _chrome_dirs():
-        if os.path.isdir(path):
-            cmd[-1:-1] = ["--bind", path, path]
+        if path == "/tmp" or not os.path.isdir(path):
+            continue
+        cmd[-1:-1] = ["--bind", path, path]
     return cmd
 
 
 def _bwrap_ok() -> bool:
-    """bwrap exists on the PATH but can still be unusable — e.g. Ubuntu
-    24.04 restricts unprivileged user namespaces via AppArmor. Probe it
-    before re-exec, or a runtime failure would take the whole run down.
-    """
-    import subprocess
+    """bwrap can exist yet be unusable — e.g. Ubuntu 24.04 restricts
+    unprivileged user namespaces via AppArmor. Probe it (with the
+    network namespace we actually use) before committing."""
     try:
         r = subprocess.run(
             ["bwrap", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev",
-             "--proc", "/proc", "--", "/bin/true"],
+             "--proc", "/proc", "--unshare-net", "--", "/bin/true"],
             capture_output=True, timeout=20)
         return r.returncode == 0
     except Exception:  # noqa: BLE001
@@ -134,30 +140,44 @@ def available() -> bool:
     return _backend() is not None
 
 
-def maybe_reexec(out_root: str) -> None:
-    """Re-exec the current process inside the sandbox.
+def spawn_sandboxed(payload: dict, out_root: str) -> int:
+    """Run the benchmark child under the sandbox; returns its exit code.
 
-    No-op when already sandboxed, when no backend exists (Windows, or
-    linux without bwrap), or on error — the run proceeds unsandboxed
-    rather than failing.
+    payload: {provider, run_cfg, only_types, out, keep, done_file} —
+    the child runs the tasks and writes the run dir to done_file.
+    Network is endpoint-only (the parent handles the platform upload
+    outside the sandbox).
     """
-    if in_sandbox() or not available():
-        return
     backend = _backend()
-    env = dict(os.environ, **{MARKER: "1"})
+    out_root = os.path.abspath(out_root)
+    os.makedirs(out_root, exist_ok=True)
+    hosts = allowed_hosts(payload["provider"]["base_url"], None)
+    tunnel = Tunnel(hosts)
+
+    child_env = dict(os.environ, **{
+        MARKER: "1",
+        PAYLOAD: json.dumps(payload),
+        SOCK_ENV: tunnel.path,
+    })
+    entry = [sys.executable, "-u", "-m", "wl_benchmark.child"]
     try:
         if backend == "seatbelt":
             profile = _seatbelt_profile(out_root)
-            fd, path = tempfile.mkstemp(suffix=".sb", prefix="wlb-")
+            fd, prof_path = tempfile.mkstemp(suffix=".sb", prefix="wlb-")
             with os.fdopen(fd, "w") as f:
                 f.write(profile)
-            os.execve(SANDBOX_EXEC,
-                      [SANDBOX_EXEC, "-f", path, sys.executable]
-                      + list(sys.argv), env)
-        else:   # bwrap
-            os.makedirs(out_root, exist_ok=True)
-            cmd = _bwrap_cmd(out_root) + [sys.executable] + list(sys.argv)
-            os.execvpe(cmd[0], cmd, env)
-        # exec never returns
-    except OSError:
-        pass    # run unsandboxed
+            argv = [SANDBOX_EXEC, "-f", prof_path] + entry
+        else:
+            argv = _bwrap_cmd(out_root, tunnel.path) + entry
+
+        # the terminal delivers Ctrl+C to the whole foreground group;
+        # the child handles it (exit 130) — the parent must not die first
+        prev_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            proc = subprocess.Popen(argv, env=child_env)
+            rc = proc.wait()
+        finally:
+            signal.signal(signal.SIGINT, prev_int)
+        return rc if rc >= 0 else 128 - rc
+    finally:
+        tunnel.close()
