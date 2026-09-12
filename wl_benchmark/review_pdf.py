@@ -29,7 +29,10 @@ def _chrome() -> str:
     for cand in CHROME_CANDIDATES:
         if os.path.exists(cand):
             return cand
-    which = shutil.which("chromium") or shutil.which("google-chrome")
+    # google-chrome first: on Ubuntu /usr/bin/chromium is a snap wrapper
+    # that misbehaves in headless environments
+    which = (shutil.which("google-chrome") or shutil.which("chromium")
+             or shutil.which("chromium-browser"))
     if which:
         return which
     raise RuntimeError("Chrome/Chromium not found (required to render the review PDF)")

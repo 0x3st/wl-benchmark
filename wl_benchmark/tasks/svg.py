@@ -242,8 +242,11 @@ def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
         return png_path
 
     chrome = None
+    # google-chrome first: on Ubuntu /usr/bin/chromium is a snap wrapper
+    # that misbehaves in headless environments
     for cand in ("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-                 shutil.which("chromium"), shutil.which("google-chrome")):
+                 shutil.which("google-chrome"), shutil.which("chromium"),
+                 shutil.which("chromium-browser")):
         if cand and os.path.exists(cand):
             chrome = cand
             break
