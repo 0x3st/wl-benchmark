@@ -166,10 +166,8 @@ def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None
         print(f"  {e}")
         print(f"  retry later with: wlb --upload {run_dir}")
         return
-    deleted = cleanup_run(run_dir) if not keep else False
-    print(f"share  {url}" + ("  (local data deleted)" if deleted else ""))
-    if keep:
-        print(f"local  {run_dir}")
+    cleanup_run(run_dir) if not keep else None
+    print(f"[wlb] result: {url}")
 
 
 def do_upload(run_dir: str, keep: bool = False) -> None:
@@ -186,11 +184,8 @@ def do_upload(run_dir: str, keep: bool = False) -> None:
         print(f"upload FAILED — local data kept at {run_dir}")
         print(f"  {e}")
         raise SystemExit(1)
-    print(f"share  {url}")
-    if keep:
-        print(f"local  {run_dir}")
-    elif cleanup_run(run_dir):
-        print("local run data deleted")
+    cleanup_run(run_dir) if not keep else None
+    print(f"[wlb] result: {url}")
 
 
 def do_report(run_dir: str) -> None:
@@ -233,10 +228,10 @@ def main(argv=None) -> None:
     try:
         cmd_run(args)
     except KeyboardInterrupt:
-        print("\n[cli] interrupted — nothing was uploaded, local data kept")
+        print("\n[wlb] interrupted — nothing was uploaded, local data kept")
         raise SystemExit(130)
     except EOFError:
-        print("\n[cli] input closed — nothing was uploaded, local data kept")
+        print("\n[wlb] input closed — nothing was uploaded, local data kept")
         raise SystemExit(130)
 
 
