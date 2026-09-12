@@ -237,12 +237,15 @@ Model output is handled as data — the only place it gets "executed" is
 headless Chrome (SVG rasterization + the review PDF). Two layers
 contain it:
 
-- **OS sandbox.** The whole run re-execs itself under a
-  deny-by-default sandbox: macOS Seatbelt (`sandbox-exec`) or Linux
-  bubblewrap (`bwrap`, probed before use). File writes are confined to
-  the run directory, `/tmp` and the browser's own support dirs; network
-  stays open (the endpoint is user-chosen). Windows has no practical
-  unprivileged sandbox — the run proceeds unsandboxed there.
+- **OS sandbox, network included.** The CLI prompts for everything,
+  then spawns the benchmark as a sandboxed child process: macOS
+  Seatbelt (`sandbox-exec`) or Linux bubblewrap (`bwrap`, probed before
+  use). File writes are confined to the run directory, `/tmp` and the
+  browser's own support dirs; **all network access is denied** — the
+  child's only egress is a parent-run Unix-socket proxy whitelisted to
+  the model endpoint (TLS stays end-to-end). The review PDF and the
+  platform upload happen in the trusted parent. Windows has no
+  practical unprivileged sandbox — the run proceeds unsandboxed there.
 - **SVG sanitizer.** Scripts, event handlers, embedded HTML and
   external references are stripped from every SVG before it is saved or
   rastered; SVGs that fail XML parsing never reach Chrome at all.
