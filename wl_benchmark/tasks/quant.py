@@ -197,7 +197,7 @@ class QuantTask(BaseTask):
             res = client.chat(
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
-                max_tokens=self.run_cfg.get("quant_max_tokens", 8192),
+                max_tokens=self.run_cfg.get("quant_max_tokens", 32768),
                 temperature=self.run_cfg.get("temperature", 0.0))
             latencies.append(res.latency)
             for k in ("prompt_tokens", "completion_tokens", "total_tokens"):

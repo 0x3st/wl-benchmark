@@ -403,7 +403,7 @@ class SchedulingTask(BaseTask):
             res = client.chat(
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
-                max_tokens=self.run_cfg.get("scheduling_max_tokens", 4096),
+                max_tokens=self.run_cfg.get("scheduling_max_tokens", 32768),
                 temperature=self.run_cfg.get("temperature", 0.2))
             latencies.append(res.latency)
             for k in ("prompt_tokens", "completion_tokens", "total_tokens"):

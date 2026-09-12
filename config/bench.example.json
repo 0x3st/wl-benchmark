@@ -4,9 +4,9 @@
   "run": {
     "rubric_modality": "auto",
     "max_tokens": 2048,
-    "essay_max_tokens": 4096,
+    "essay_max_tokens": 32768,
     "svg_max_tokens": 16384,
-    "scheduling_max_tokens": 4096,
+    "scheduling_max_tokens": 32768,
     "temperature": 0.2,
     "timeout": 300,
     "quant_max_turns": 16,

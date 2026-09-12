@@ -93,8 +93,9 @@ class ChatClient:
         if tools:
             body["tools"] = tools
             body["tool_choice"] = tool_choice
-        if max_tokens:
-            body["max_tokens"] = max_tokens
+        # max_tokens=None/0: omit the parameter entirely — the server
+        # then uses its own default (the right choice for self-hosted
+        # deployments with no token quota)
         if temperature is not None:
             body["temperature"] = temperature
         if response_format:
@@ -137,9 +138,9 @@ class ChatClient:
                                 body["max_tokens"] = max_tokens * 2
                             payload = json.dumps(body).encode()
                             continue
-                        if not boosted:
+                        if not boosted and max_tokens:
                             boosted = True
-                            body["max_tokens"] = (max_tokens or 8192) * 2
+                            body["max_tokens"] = max_tokens * 2
                             payload = json.dumps(body).encode()
                             continue
                         break   # still burning out — give up with the diag
