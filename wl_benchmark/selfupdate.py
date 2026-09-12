@@ -48,6 +48,15 @@ def install_mode() -> str:
     return "unknown"
 
 
+def _vkey(v: str):
+    """Numeric sort key for dotted versions ('0.4.10' > '0.4.8')."""
+    parts = []
+    for x in v.split("."):
+        digits = "".join(ch for ch in x if ch.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
 def running_version() -> str:
     try:
         return version(PKG)
@@ -152,10 +161,12 @@ def maybe_upgrade(latest: str | None, interactive: bool = True) -> None:
     Exits the process after a successful upgrade — the running code is
     the old one, so the user should re-run `wlb` on the new version.
     """
-    if install_mode() == "source":
+    mode = install_mode()
+    if mode == "source":
         # a checkout is by definition the freshest code; never nag
         return
-    if not latest or latest <= current:
+    current = running_version()
+    if not latest or _vkey(latest) <= _vkey(current):
         return
     if not interactive:
         print(f"[update] v{latest} available (installed {current}) — "
