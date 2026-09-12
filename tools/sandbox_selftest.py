@@ -174,6 +174,9 @@ if CHILD:
 
 # ---- parent: spawn the sandboxed child of this file --------------------
 if not sandbox.available():
+    if os.environ.get("WL_BENCH_SELFTEST_REQUIRE"):
+        print("FAIL: no sandbox backend on this machine (required)")
+        sys.exit(1)
     print("SKIP: no sandbox backend on this machine")
     sys.exit(0)
 print(f"backend: {sandbox._backend()}")

@@ -91,11 +91,12 @@ def _seatbelt_profile(out_root: str) -> str:
     )
 
 
-def _bwrap_cmd(out_root: str, ctrl_fd: int) -> list:
+def _bwrap_cmd(out_root: str) -> list:
     """bubblewrap: read-only root, writable islands, no network at all
-    (--unshare-net); the control fd enters via --pass-fd. Read-only
-    binds also make every other Unix socket on the filesystem
-    unconnectable (connect needs write access)."""
+    (--unshare-net). The control socket enters as stdin (fd 0) — bwrap
+    passes the standard fds through and older versions lack
+    --pass-fd. Read-only binds also make every other Unix socket on
+    the filesystem unconnectable (connect needs write access)."""
     cmd = [
         "bwrap",
         "--ro-bind", "/", "/",
@@ -103,7 +104,6 @@ def _bwrap_cmd(out_root: str, ctrl_fd: int) -> list:
         "--proc", "/proc",
         "--tmpfs", "/tmp",
         "--unshare-net",
-        f"--pass-fd", str(ctrl_fd),
         "--bind", os.path.abspath(out_root), os.path.abspath(out_root),
         "--die-with-parent",
         "--",
@@ -121,21 +121,16 @@ def _bwrap_cmd(out_root: str, ctrl_fd: int) -> list:
 
 def _bwrap_ok() -> bool:
     """bwrap can exist yet be unusable — e.g. Ubuntu 24.04 restricts
-    unprivileged user namespaces via AppArmor. Probe it (with the
-    network namespace and fd passing we actually use)."""
-    r, w = os.pipe()
+    unprivileged user namespaces via AppArmor. Probe it with the
+    network namespace we actually use."""
     try:
         p = subprocess.run(
             ["bwrap", "--ro-bind", "/", "/", "--dev-bind", "/dev", "/dev",
-             "--proc", "/proc", "--unshare-net", "--pass-fd", str(r),
-             "--", "/bin/sh", "-c", f"test -e /proc/self/fd/{r}"],
-            pass_fds=[r], capture_output=True, timeout=20)
+             "--proc", "/proc", "--unshare-net", "--", "/bin/true"],
+            capture_output=True, timeout=20)
         return p.returncode == 0
     except Exception:  # noqa: BLE001
         return False
-    finally:
-        os.close(r)
-        os.close(w)
 
 
 def _backend() -> str | None:
@@ -164,6 +159,7 @@ def spawn_sandboxed_entry(entry: list, out_root: str, allowed: set,
     os.makedirs(out_root, exist_ok=True)
     tunnel = Tunnel(allowed)
 
+    stdin_arg = None
     child_env = dict(os.environ, **(env_extra or {}), **{
         MARKER: "1",
         SOCK_ENV: str(tunnel.child_fd),
@@ -175,18 +171,25 @@ def spawn_sandboxed_entry(entry: list, out_root: str, allowed: set,
             with os.fdopen(fd, "w") as f:
                 f.write(profile)
             argv = [SANDBOX_EXEC, "-f", prof_path] + entry
+            pass_fds = [tunnel.child_fd]
         else:
-            argv = _bwrap_cmd(out_root, tunnel.child_fd) + entry
+            # bwrap: the control socket rides in as stdin (fd 0)
+            argv = _bwrap_cmd(out_root) + entry
+            child_env[SOCK_ENV] = "0"
+            stdin_arg = os.dup(tunnel.child_fd)
+            pass_fds = []
 
         # the terminal delivers Ctrl+C to the whole foreground group;
         # the child handles it (exit 130) — the parent must not die first
         prev_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            proc = subprocess.Popen(argv, env=child_env,
-                                    pass_fds=[tunnel.child_fd])
+            proc = subprocess.Popen(argv, env=child_env, stdin=stdin_arg,
+                                    pass_fds=pass_fds)
             rc = proc.wait()
         finally:
             signal.signal(signal.SIGINT, prev_int)
+            if stdin_arg is not None:
+                os.close(stdin_arg)
         return rc if rc >= 0 else 128 - rc
     finally:
         tunnel.close()

@@ -38,6 +38,7 @@ class Tunnel:
         a, b = socket.socketpair()
         self.parent_fd = a.detach()      # raw int; served by the thread
         self.child_fd = b.detach()       # raw int, passed to the child
+        self._child_sock = b             # for the bwrap stdin route
         self._alive = True
         threading.Thread(target=self._serve, daemon=True).start()
 
@@ -105,5 +106,9 @@ class Tunnel:
             pass
         try:
             os.close(self.child_fd)
+        except OSError:
+            pass
+        try:
+            self._child_sock.close()
         except OSError:
             pass

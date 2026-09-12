@@ -28,7 +28,7 @@ jobs:
         run: python tools/sandbox_selftest.py --baseline
       - name: "Sandbox self-test (bwrap + Chrome raster)"
         timeout-minutes: 6
-        run: python tools/sandbox_selftest.py
+        run: WL_BENCH_SELFTEST_REQUIRE=1 python tools/sandbox_selftest.py
 
   sandbox-macos:
     runs-on: macos-latest
@@ -45,4 +45,4 @@ jobs:
           python tools/sandbox_selftest.py --baseline
       - name: "Sandbox self-test (seatbelt + Chrome raster)"
         timeout-minutes: 6
-        run: python tools/sandbox_selftest.py
+        run: WL_BENCH_SELFTEST_REQUIRE=1 python tools/sandbox_selftest.py
