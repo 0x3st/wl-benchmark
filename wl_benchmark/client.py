@@ -103,6 +103,8 @@ class ChatClient:
         payload = json.dumps(body).encode()
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
+        no_thinking = False      # "thinking" param tried and rejected?
+        boosted = False          # token budget already doubled?
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -116,9 +118,10 @@ class ChatClient:
                 res = self._parse(data, time.time() - t0)
                 if (res.content is None or not res.content.strip()) \
                         and not res.tool_calls:
-                    # reasoning models can burn the whole budget thinking
-                    # and return an empty content — surface it, never
-                    # silently score an empty answer
+                    # Reasoning models can burn the whole budget thinking
+                    # and return an empty content. Escalate instead of
+                    # scoring an empty answer: retry with thinking
+                    # disabled (GLM-style param) and a doubled budget.
                     usage = res.usage or {}
                     res.error = (
                         f"empty content (finish_reason={res.finish_reason}, "
@@ -127,7 +130,20 @@ class ChatClient:
                     last_err = res.error
                     last_res = res
                     if res.finish_reason == "length":
-                        break   # deterministic burn-out; a retry would too
+                        if not no_thinking:
+                            no_thinking = True
+                            body["thinking"] = {"type": "disabled"}
+                            if max_tokens:
+                                body["max_tokens"] = max_tokens * 2
+                            payload = json.dumps(body).encode()
+                            continue
+                        if not boosted:
+                            boosted = True
+                            body["max_tokens"] = (max_tokens or 8192) * 2
+                            payload = json.dumps(body).encode()
+                            continue
+                        break   # still burning out — give up with the diag
+                    continue    # finish_reason=stop: transient, plain retry
                 else:
                     return res
             except urllib.error.HTTPError as e:
@@ -137,6 +153,12 @@ class ChatClient:
                 except Exception:
                     pass
                 last_err = f"HTTP {e.code}: {detail}"
+                if e.code == 400 and "thinking" in body:
+                    # endpoint rejects the thinking param — drop it and
+                    # retry with the (already boosted) budget
+                    body.pop("thinking", None)
+                    payload = json.dumps(body).encode()
+                    continue
                 if e.code not in self.RETRYABLE:
                     break
             except Exception as e:  # noqa: BLE001
