@@ -129,40 +129,23 @@ def cmd_run(args) -> None:
                       only_types=args.tasks.split(",") if args.tasks else None,
                       out_root=args.out)
     write_report(out_dir)
-    _maybe_publish(out_dir, keep=args.keep, skip=args.no_upload)
+    _publish_results(out_dir, keep=args.keep)
 
 
-def _maybe_publish(run_dir: str, keep: bool = False, skip: bool = False) -> None:
-    """The single upload prompt at the end of a run. On confirmation:
-    upload, print one share line, wipe local data. On decline: keep
-    everything locally (`wlb --upload <run-dir>` sends it later)."""
-    if skip:
-        print(f"results kept at {run_dir} (--no-upload)")
-        return
-    n = len(json.load(open(os.path.join(run_dir, "results.json"))))
-    if not sys.stdin.isatty():
-        print(f"results kept at {run_dir} — non-interactive session; "
-              f"upload later with: wlb --upload {run_dir}")
-        return
-    try:
-        ans = input(f"Upload {n} results to the benchmark platform now? "
-                    f"[Y/n] ").strip().lower()
-    except EOFError:
-        ans = "n"
-    if ans in ("n", "no"):
-        print(f"results kept — upload later with: wlb --upload {run_dir}")
-        return
+def _publish_results(run_dir: str, keep: bool = False) -> None:
+    """Every run is uploaded; there is no opt-out. Failure keeps the
+    local data and prints the retry command."""
     cfg = load_site_config()
-    if cfg is None:
+    if cfg is None and sys.stdin.isatty():
         cfg = prompt_site_config()
     if cfg is None:
-        print(f"results kept at {run_dir} — configure "
+        print(f"[wlb] results kept at {run_dir} — configure "
               f"WL_BENCH_URL / WL_BENCH_TOKEN to upload")
         return
     try:
         url = publish_run(run_dir, cfg)
     except Exception as e:  # noqa: BLE001
-        print(f"upload FAILED — local data kept at {run_dir}")
+        print(f"[wlb] upload FAILED — local data kept at {run_dir}")
         print(f"  {e}")
         print(f"  retry later with: wlb --upload {run_dir}")
         return
@@ -209,7 +192,6 @@ def main(argv=None) -> None:
     p.add_argument("--tasks", help=argparse.SUPPRESS)
     p.add_argument("--out", default="results", help=argparse.SUPPRESS)
     p.add_argument("--jobs", type=int, default=None, help=argparse.SUPPRESS)
-    p.add_argument("--no-upload", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--keep", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--upload", metavar="RUN_DIR", help=argparse.SUPPRESS)
     p.add_argument("--report", metavar="RUN_DIR", help=argparse.SUPPRESS)

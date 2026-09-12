@@ -175,8 +175,9 @@ Upload results to the benchmark platform now? [Y/n] y
 - Independent tasks run concurrently (default 3 workers); the research
   proposal waits for the two earlier writings it consumes. While tasks
   run, a single-line progress bar is shown — no streaming logs.
-- **Nothing is uploaded automatically** — answer `n` and the run stays
-  local; upload later with `wlb --upload results/<timestamp>`.
+- Every run is uploaded automatically when it finishes — the share link
+  is the last line. A failed upload keeps the data locally
+  (`wlb --upload results/<timestamp>` retries).
 - If a newer release exists on PyPI, `wlb` offers to self-update before
   testing (pip / pipx / Homebrew aware; a git checkout prints
   `git pull` instead).
@@ -188,7 +189,6 @@ wlb --endpoint https://api.example.com/v1 --key sk-xxx --model model-a
 wlb --tasks essay,svg          # run a subset of domains
 wlb --jobs 6                   # more parallel workers (1 = sequential)
 wlb --keep                     # keep local run data after upload
-wlb --no-upload                # never ask, never upload
 wlb --upload results/<ts>      # send a local run to the platform
 wlb --report results/<ts>      # rebuild summary.md + review.pdf
 ```
