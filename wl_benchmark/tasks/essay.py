@@ -192,7 +192,7 @@ class EssayTask(BaseTask):
 
         res = client.chat(model, [{"role": "user", "content": model_parts}],
                           max_tokens=self.run_cfg.get("essay_max_tokens"),
-                          temperature=self.run_cfg.get("temperature", 0.4))
+                          temperature=self.run_cfg.get("temperature"))
 
         essay_path = None
         if res.ok and res.content:

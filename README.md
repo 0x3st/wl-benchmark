@@ -229,7 +229,7 @@ run (saved to `config/site.json`, gitignored).
 
 ### Run parameters
 
-Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `temperature`, `tasks_data_root`, and the limits `timeout` (seconds per request, default 1800) and `task_minutes` (wall-clock ceiling per task, default 30 — the ONLY limit; a task may use as many tool turns or tokens as it likes within it). No token budget is sent by default — the model generates until it is done, which is the fair way to measure capability. Set token budgets only to cap cost on a metered API. Provider information is never stored there.
+Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `tasks_data_root`, `temperature` (by default the parameter is not sent at all — every model is scored under its own default sampling), the limits `timeout` (seconds per request, default 1800) and `task_minutes` (wall-clock ceiling per task, default 30 — the ONLY limit; a task may use as many tool turns or tokens as it likes within it). No token budget is sent by default — the model generates until it is done, which is the fair way to measure capability. Set token budgets only to cap cost on a metered API. Provider information is never stored there.
 
 ## Security
 

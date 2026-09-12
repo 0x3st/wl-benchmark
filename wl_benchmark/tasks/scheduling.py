@@ -404,7 +404,7 @@ class SchedulingTask(BaseTask):
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
                 max_tokens=self.run_cfg.get("scheduling_max_tokens"),
-                temperature=self.run_cfg.get("temperature", 0.2))
+                temperature=self.run_cfg.get("temperature"))
             latencies.append(res.latency)
             for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 usage_acc[k] = usage_acc.get(k, 0) + \

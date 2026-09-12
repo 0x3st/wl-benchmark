@@ -296,7 +296,7 @@ class SvgTask(BaseTask):
             model,
             [{"role": "user", "content": f"{instruction}\n\n{QUALITY_NOTE}"}],
             max_tokens=self.run_cfg.get("svg_max_tokens"),
-            temperature=self.run_cfg.get("temperature", 0.4))
+            temperature=self.run_cfg.get("temperature"))
 
         if not res.ok:
             return TaskResult(task_id=self.task_id, task_type=self.task_type,

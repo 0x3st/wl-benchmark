@@ -7,11 +7,11 @@
     "essay_max_tokens": null,
     "svg_max_tokens": null,
     "scheduling_max_tokens": null,
-    "temperature": 0.2,
+    "temperature": null,
     "timeout": 1800,
     "quant_max_tokens": null,
     "parallel_jobs": 3,
     "task_minutes": 30
   },
-  "_comment_budget": "max_tokens*: null = 不限制生成（默认）。timeout = 单请求秒数；task_minutes = 每任务总时限（分钟，默认 30）——这是唯一的限制。"
+  "_comment_budget": "max_tokens*: null = 不限制生成（默认）。timeout = 单请求秒数；task_minutes = 每任务总时限（分钟，默认 30）——这是唯一的限制。temperature: null = 不传采样参数，用模型自己的默认。"
 }
