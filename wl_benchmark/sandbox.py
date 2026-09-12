@@ -103,6 +103,10 @@ def _bwrap_cmd(out_root: str) -> list:
         "--dev-bind", "/dev", "/dev",
         "--proc", "/proc",
         "--tmpfs", "/tmp",
+        # hide every system service socket (docker.sock, dbus, ...) —
+        # read-only binds do NOT prevent AF_UNIX connects, but the
+        # sockets cannot be reached if they are not there
+        "--tmpfs", "/run",
         "--unshare-net",
         "--bind", os.path.abspath(out_root), os.path.abspath(out_root),
         "--die-with-parent",
