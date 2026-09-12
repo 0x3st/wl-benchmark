@@ -41,7 +41,7 @@ def run_chrome_capture(cmd: list, out_path: str, timeout: float = 60) -> None:
         tail = ""
         try:
             with open(err_file.name, "rb") as f:
-                tail = f.read()[-600:].decode(errors="replace") \
+                tail = f.read()[-3000:].decode(errors="replace") \
                     .replace("\n", " | ")
         except OSError:
             pass

@@ -47,17 +47,17 @@ try:
 except OSError as e:
     check(f"write inside run dir ({e})", False)
 
-# writes outside are denied
+# writes outside are denied (seatbelt: EPERM; bwrap: EROFS)
+import errno
 for victim in (os.path.expanduser("~/wlb-evil.txt"), "/etc/wlb-evil.conf"):
     try:
         open(victim, "w").write("evil")
         os.unlink(victim)
         check(f"write denied: {victim}", False)
-    except PermissionError:
-        check(f"write denied: {victim}", True)
     except OSError as e:
-        # IsADirectoryError etc. would mean it TRIED to write — bad
-        check(f"write denied: {victim} ({type(e).__name__})", False)
+        denied = e.errno in (errno.EPERM, errno.EACCES, errno.EROFS)
+        check(f"write denied: {victim} ({errno.errorcode.get(e.errno, '?')})",
+              denied)
 
 # reads anywhere are allowed
 try:
