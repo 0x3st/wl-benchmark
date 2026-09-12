@@ -40,6 +40,8 @@ class ChatClient:
 
     RETRYABLE = (429, 500, 502, 503, 504)
 
+    DEFAULT_MAX_TOKENS = 65536   # lift the server's output cap
+
     def __init__(self, base_url: str, api_key: str, timeout: int = 180,
                  max_retries: int = 3, proxy: str = "direct"):
         self.base_url = base_url.rstrip("/")
@@ -93,11 +95,15 @@ class ChatClient:
         if tools:
             body["tools"] = tools
             body["tool_choice"] = tool_choice
-        # max_tokens=None/0: omit the parameter entirely — the server
-        # then uses its own default (the right choice for self-hosted
-        # deployments with no token quota)
+        # No budget configured: send a LARGE max_tokens on purpose.
+        # Servers apply their own default output cap when the parameter
+        # is omitted (observed: 8192), and reasoning models burn that
+        # cap on thinking before writing any content. A big value lifts
+        # the cap; if the server rejects it we retry without (below).
         if max_tokens:
             body["max_tokens"] = max_tokens
+        else:
+            body["max_tokens"] = self.DEFAULT_MAX_TOKENS
         if temperature is not None:
             body["temperature"] = temperature
         if response_format:
@@ -160,6 +166,13 @@ class ChatClient:
                     # endpoint rejects the thinking param — drop it and
                     # retry with the (already boosted) budget
                     body.pop("thinking", None)
+                    payload = json.dumps(body).encode()
+                    continue
+                if e.code == 400 and "max_tokens" in body \
+                        and body["max_tokens"] == self.DEFAULT_MAX_TOKENS:
+                    # server caps output below our lift — retry with its
+                    # own default instead
+                    body.pop("max_tokens", None)
                     payload = json.dumps(body).encode()
                     continue
                 if e.code not in self.RETRYABLE:
