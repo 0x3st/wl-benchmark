@@ -97,8 +97,13 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
         with draw_lock:
             rows = [f"  #   task                          status   time"]
             rows += [_fmt_row(i, tid) for i, tid in enumerate(states)]
-            up = "" if not drew["lines"] else f"\x1b[{drew['lines']}F"
-            sys.stdout.write(up + "".join("\r\x1b[K" + r for r in rows))
+            # every row ends with \n, so the cursor lands one line BELOW
+            # the table; \x1b[{n}F (up n lines) returns to the header.
+            # without the newlines all rows collapse onto one physical
+            # line and each redraw creeps upward, eating earlier output.
+            up = "" if not drew["lines"] else f"\x1b[{len(rows)}F"
+            sys.stdout.write(up + "".join("\r\x1b[K" + r + "\n"
+                                           for r in rows))
             sys.stdout.flush()
             drew["lines"] = len(rows)
 
