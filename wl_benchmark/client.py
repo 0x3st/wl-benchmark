@@ -112,9 +112,6 @@ class ChatClient:
         payload = json.dumps(body).encode()
         last_err: Optional[str] = None
         last_res: Optional[ChatResult] = None
-        no_thinking = False      # "thinking" param tried and rejected?
-        boosted = False          # token budget already doubled?
-        escalations: list = []   # what we tried, for the final message
 
         for attempt in range(self.max_retries):
             t0 = time.time()
@@ -140,41 +137,27 @@ class ChatClient:
                     last_err = res.error
                     last_res = res
                     if res.finish_reason == "length":
-                        if not no_thinking:
-                            no_thinking = True
-                            escalations.append("retry with thinking disabled")
-                            body["thinking"] = {"type": "disabled"}
-                            if max_tokens:
-                                body["max_tokens"] = max_tokens * 2
-                            payload = json.dumps(body).encode()
-                            continue
-                        if not boosted and max_tokens:
-                            boosted = True
-                            escalations.append("retry with doubled budget")
-                            body["max_tokens"] = max_tokens * 2
-                            payload = json.dumps(body).encode()
-                            continue
-                        # still empty: explain exactly what happened
+                        # thinking stays ON — disabling it would score
+                        # the model without its core capability. The fix
+                        # belongs to the deployment: raise the output cap.
                         server_cap = usage.get("completion_tokens")
                         asked = body.get("max_tokens")
                         clamped = (isinstance(server_cap, int)
                                    and asked and server_cap < asked)
                         res.error = (
                             "empty content: the model spent its whole "
-                            f"output on reasoning ({res.reasoning_chars} "
+                            f"output budget on reasoning ({res.reasoning_chars} "
                             "chars) and hit the output limit"
                             + (f" — the server clamped generation at "
                                f"{server_cap} tokens though we requested "
                                f"{asked}" if clamped else
                                f" (finish_reason=length, "
                                f"completion_tokens={server_cap})")
-                            + (f"; tried: {'; '.join(escalations)}"
-                               if escalations else "")
-                            + " — the server ignored the thinking-disable "
-                              "parameter; this deployment cannot fit a "
-                              "long reasoning phase and the answer in "
-                              "its output limit. Try another model or "
-                              "deployment.")
+                            + ". The deployment's max output must be "
+                              "raised (GLM-5.3 supports far more than "
+                              "this) or a deployment without the cap "
+                              "used — reasoning must stay on, it is the "
+                              "capability being measured.")
                         last_err = res.error
                         last_res = res
                         break
