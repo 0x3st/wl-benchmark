@@ -74,15 +74,17 @@ def _badge(r: dict) -> str:
             f"<span class='score'>{r['score']:.2f}</span>")
 
 
-def _img_artifact(r: dict) -> str:
-    png = next((a for a in r.get("artifacts", []) if a.endswith(".png")
-                and os.path.exists(a)), None)
+def _img_artifact(r: dict, run_dir: str) -> str:
+    from .artifacts import run_artifacts
+    png = next((a for a in run_artifacts(r, run_dir)
+                if a.endswith(".png") and os.path.exists(a)), None)
     return f"<img src='{_b64(png, 'image/png')}'>" if png else ""
 
 
-def _md_artifacts(r: dict) -> str:
+def _md_artifacts(r: dict, run_dir: str) -> str:
+    from .artifacts import run_artifacts
     out = []
-    for a in r.get("artifacts", []):
+    for a in run_artifacts(r, run_dir):
         if a.endswith(".md") and os.path.exists(a):
             with open(a, encoding="utf-8") as f:
                 out.append(md_to_html(f.read()))
@@ -122,7 +124,7 @@ def _quant_section(r: dict) -> str:
             h += (f"<p class='meta'>Final = "
                   f"{d.get('auto_weight', 0.8):.0%} x auto ({auto:.2f}) + "
                   f"{d.get('note_weight', 0.2):.0%} x note score.</p>")
-    h += "<h3>RESEARCH NOTE</h3>" + _md_artifacts(r)
+    h += "<h3>RESEARCH NOTE</h3>" + _md_artifacts(r, run_dir)
     return h
 
 
@@ -196,14 +198,14 @@ def build_run_page(results: list, run_id: str, run_dir: str = "") -> str:
                 body.append(f"<p class='meta'>graded by a human against the "
                             f"task rubric.</p>")
             body.append(_cons_table(d.get("constraints", [])))
-            body.append("<h3>ESSAY</h3>" + _md_artifacts(r))
+            body.append("<h3>ESSAY</h3>" + _md_artifacts(r, run_dir))
         elif ttype == "svg":
             body.append("<p class='meta'>Random picks: <b>"
                         + html.escape(json.dumps(d.get("picks", {}),
                                                  ensure_ascii=False))
                         + "</b></p>")
             body.append(_cons_table(d.get("constraints", [])))
-            body.append(_img_artifact(r))
+            body.append(_img_artifact(r, run_dir))
             if d.get("raster_blank"):
                 body.append("<p style='color:#82071d'>⚠ the rendered PNG is "
                             "blank — the model's SVG likely failed to parse; "
@@ -212,7 +214,8 @@ def build_run_page(results: list, run_id: str, run_dir: str = "") -> str:
             if d.get("raster_error"):
                 body.append(f"<p class='meta'>raster error: "
                             f"{html.escape(d['raster_error'])}</p>")
-            svg_file = next((a for a in r.get("artifacts", [])
+            from .artifacts import run_artifacts
+            svg_file = next((a for a in run_artifacts(r, run_dir)
                              if a.endswith(".svg") and os.path.exists(a)), None)
             if svg_file:
                 body.append(f"<p><a href='{_b64(svg_file, 'image/svg+xml')}' "

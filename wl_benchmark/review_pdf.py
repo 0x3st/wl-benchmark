@@ -199,9 +199,10 @@ def _task_section(r: dict, run_dir: str) -> str:
                          f"<td>{'PASS' if c['ok'] else 'FAIL'}</td>"
                          f"<td>{html.escape(str(c['detail']))}</td></tr>")
             h.append("</table>")
-        for a in r.get("artifacts", []):
+        from .artifacts import run_artifacts
+        for a in run_artifacts(r, run_dir):
             if a.endswith(".png") and os.path.exists(a):
-                h.append(f"<img src='file://{a}' "
+                h.append(f"<img src='file://{html.escape(a, quote=True)}' "
                          f"style='max-width:100%;border:1px solid #999'>")
         rerr = d.get("raster_error")
         if rerr:
