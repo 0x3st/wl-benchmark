@@ -231,6 +231,27 @@ run (saved to `config/site.json`, gitignored).
 
 Optional file `config/bench.json` (see `config/bench.example.json`) may override: `rubric_modality` (`auto|image|doc|text`), `max_tokens`, `essay_max_tokens`, `svg_max_tokens`, `scheduling_max_tokens`, `temperature`, `timeout`, `tasks_data_root`. Provider information is never stored there.
 
+## Security
+
+Model output is handled as data — the only place it gets "executed" is
+headless Chrome (SVG rasterization + the review PDF). Two layers
+contain it:
+
+- **OS sandbox.** The whole run re-execs itself under a
+  deny-by-default sandbox: macOS Seatbelt (`sandbox-exec`) or Linux
+  bubblewrap (`bwrap`, probed before use). File writes are confined to
+  the run directory, `/tmp` and the browser's own support dirs; network
+  stays open (the endpoint is user-chosen). Windows has no practical
+  unprivileged sandbox — the run proceeds unsandboxed there.
+- **SVG sanitizer.** Scripts, event handlers, embedded HTML and
+  external references are stripped from every SVG before it is saved or
+  rastered; SVGs that fail XML parsing never reach Chrome at all.
+
+Both backends are verified in CI (`tools/sandbox_selftest.py` runs on
+ubuntu-latest with bubblewrap and macos-latest with seatbelt:
+write-denial outside the run dir, writes inside, network, and a real
+Chrome raster under confinement).
+
 ## Task data layout
 
 ```

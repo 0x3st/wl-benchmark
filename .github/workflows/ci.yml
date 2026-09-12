@@ -23,9 +23,6 @@ jobs:
           sudo apt-get install -y ./chrome.deb
       - name: Allow unprivileged user namespaces (Ubuntu 24.04 AppArmor)
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - name: "Diagnose: Chrome flag matrix"
-        timeout-minutes: 5
-        run: python tools/chrome_bisect.py
       - name: "Baseline: Chrome raster outside the sandbox"
         timeout-minutes: 3
         run: python tools/sandbox_selftest.py --baseline
