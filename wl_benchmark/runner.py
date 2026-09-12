@@ -44,7 +44,7 @@ def run_all(provider: dict, run_cfg: dict, only_types: Optional[list] = None,
         return out_dir
 
     client = ChatClient(provider["base_url"], provider["api_key"],
-                        timeout=run_cfg.get("timeout", 600))
+                        timeout=run_cfg.get("timeout", 1800))
     client.label = provider.get("name") or model
 
     t0 = time.time()

@@ -8,10 +8,10 @@
     "svg_max_tokens": null,
     "scheduling_max_tokens": null,
     "temperature": 0.2,
-    "timeout": 600,
-    "quant_max_turns": 16,
+    "timeout": 1800,
     "quant_max_tokens": null,
-    "parallel_jobs": 3
+    "parallel_jobs": 3,
+    "task_minutes": 30
   },
-  "_comment_budget": "max_tokens*: null = 不限制生成（默认，推荐本地部署）。设为数字可限制输出（云 API 控成本用）。"
+  "_comment_budget": "max_tokens*: null = 不限制生成（默认）。timeout = 单请求秒数；task_minutes = 每任务总时限（分钟，默认 30）——这是唯一的限制。"
 }

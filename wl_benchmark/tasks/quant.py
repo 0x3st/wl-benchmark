@@ -187,13 +187,17 @@ class QuantTask(BaseTask):
         tool_trace: List[Dict[str, Any]] = []
         all_content: List[str] = []
         latencies, usage_acc = [], {}
-        max_turns = self.run_cfg.get("quant_max_turns", 16)
+        # the only limit is wall-clock time: the model may use as many
+        # tool turns as it likes until the task budget runs out
+        deadline = time.time() + self.run_cfg.get("task_minutes", 30) * 60
         final_content = None
         error = None
 
         os.makedirs(self.artifacts_dir, exist_ok=True)
-        for turn in range(max_turns + 1):
-            force_final = turn >= max_turns
+        turn = 0
+        while True:
+            force_final = time.time() >= deadline
+            turn += 1
             res = client.chat(
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
