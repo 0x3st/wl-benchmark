@@ -142,6 +142,13 @@ class QuantTask(BaseTask):
                      if re.search(rf"\b{f}\b", (text or "").upper())]
             if found:
                 ans["factor_ids"] = found
+        if isinstance(ans.get("factor_ids"), list):
+            # the question asks for LIBRARY factors — the market
+            # benchmark (MKT3000) and any other non-library ticker are
+            # not valid answer elements; normalize the format
+            library = {"MOM", "VAL", "SIZE", "VOL", "LIQ"}
+            ans["factor_ids"] = [f for f in ans["factor_ids"]
+                                 if str(f).upper() in library]
         return ans
 
     # -------------------------------------------------------------- eval

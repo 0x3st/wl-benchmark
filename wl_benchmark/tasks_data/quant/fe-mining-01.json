@@ -1037,7 +1037,7 @@
   {
    "id": "factor_ids",
    "weight": 0.12,
-   "prompt": "Which library factors enter the true model of SZTECH (besides the market)? Answer as a JSON list of tickers, e.g. [\"MOM\", \"VAL\"].",
+   "prompt": "Which library factors (MOM / VAL / SIZE / VOL / LIQ) enter the true model of SZTECH besides the market benchmark MKT3000? Answer as a JSON list of style-factor tickers ONLY — never include MKT3000 itself. Example: [\"MOM\", \"VAL\"].",
    "answer": [
     "MOM",
     "VAL"
