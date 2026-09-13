@@ -93,8 +93,8 @@ run("ladder: low kept, budget dropped, content obtained",
     [("resp", EMPTY), ("400", None), ("resp", GOOD)],
     lambda r, c: (
         r.content == "答案"
-        and c[0] == {"max_tokens": 65536, "reasoning_effort": None}
-        and c[1] == {"max_tokens": 65536, "reasoning_effort": "low"}
+        and c[0] == {"max_tokens": 8192, "reasoning_effort": None}
+        and c[1] == {"max_tokens": 8192, "reasoning_effort": "low"}
         and c[2] == {"max_tokens": None, "reasoning_effort": "low"}, ""))
 
 # 3. 空内容无 400: low 重试即成功（预算保留）
@@ -103,7 +103,7 @@ run("ladder without 400",
     lambda r, c: (
         r.content == "答案"
         and c[0]["reasoning_effort"] is None
-        and c[1] == {"max_tokens": 65536, "reasoning_effort": "low"}, ""))
+        and c[1] == {"max_tokens": 8192, "reasoning_effort": "low"}, ""))
 
 # 4. 全部失败 → 诊断带尝试序列
 run("all-fail diag with attempt history",
