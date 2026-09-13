@@ -188,24 +188,20 @@ class QuantTask(BaseTask):
         return score / wsum if wsum else 0.0, {"per_question": rows}
 
     # --------------------------------------------------------------- run
-    def run(self, client, model: str,
-            context: Optional[Dict[str, Any]] = None) -> TaskResult:
+    def _tool_loop(self, client, model: str):
+        """One full agentic attempt: returns (final_content, error,
+        usage_acc, latencies, tool_trace)."""
         messages: List[Dict[str, Any]] = [
             {"role": "user", "content": self._build_prompt()}]
         tool_trace: List[Dict[str, Any]] = []
-        all_content: List[str] = []
         latencies, usage_acc = [], {}
         # the only limit is wall-clock time: the model may use as many
         # tool turns as it likes until the task budget runs out
         deadline = time.time() + self.run_cfg.get("task_minutes", 30) * 60
         final_content = None
         error = None
-
-        os.makedirs(self.artifacts_dir, exist_ok=True)
-        turn = 0
         while True:
             force_final = time.time() >= deadline
-            turn += 1
             res = client.chat(
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
@@ -220,8 +216,6 @@ class QuantTask(BaseTask):
             if not res.ok:
                 error = res.error
                 break
-            if res.content:
-                all_content.append(res.content)
             if res.tool_calls and not force_final:
                 messages.append({"role": "assistant",
                                  "content": res.content or "",
@@ -243,19 +237,42 @@ class QuantTask(BaseTask):
                 continue
             final_content = res.content
             break
+        return final_content, error, usage_acc, latencies, tool_trace
 
-        if error:
+    def run(self, client, model: str,
+            context: Optional[Dict[str, Any]] = None) -> TaskResult:
+        # multi-attempt sampling: effort=low analysis quality varies run
+        # to run, so take the best-scoring of N independent attempts
+        attempts = max(1, int(self.run_cfg.get("quant_attempts", 3)))
+        os.makedirs(self.artifacts_dir, exist_ok=True)
+        best = None            # (auto_score, final_content, usage, lat, trace)
+        error = None
+        for i in range(attempts):
+            final_content, err, usage_acc, latencies, tool_trace = \
+                self._tool_loop(client, model)
+            if err:
+                error = err
+                continue
+            ans = self._parse_answer(final_content or "")
+            auto, _ = self._evaluate(ans)
+            print(f"[quant] attempt {i + 1}/{attempts}: auto={auto:.2f}",
+                  flush=True)
+            if best is None or auto > best[0]:
+                best = (auto, final_content, usage_acc, latencies,
+                        tool_trace, ans)
+        if best is None:
             return TaskResult(task_id=self.task_id, task_type=self.task_type,
                               model=model, provider=getattr(client, "label", "?"),
-                              error=error, latency=sum(latencies),
-                              usage=usage_acc)
+                              error=error or "all quant attempts failed",
+                              latency=0, usage={})
+
+        auto, final_content, usage_acc, latencies, tool_trace, ans = best
 
         reply_path = os.path.join(self.artifacts_dir,
                                   f"{self.task_id}__{model}.md")
         with open(reply_path, "w", encoding="utf-8") as f:
             f.write(final_content or "")
 
-        ans = self._parse_answer(final_content or "")
         auto, detail = self._evaluate(ans)
         detail["answer"] = ans
         detail["auto_score"] = round(auto, 4)
