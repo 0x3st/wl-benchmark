@@ -203,7 +203,9 @@ class QuantTask(BaseTask):
                 model, messages,
                 tools=None if force_final else TOOL_SCHEMAS,
                 max_tokens=self.run_cfg.get("quant_max_tokens"),
-                temperature=self.run_cfg.get("temperature"))
+                temperature=self.run_cfg.get("temperature"),
+                reasoning_effort=self.run_cfg.get("quant_reasoning_effort",
+                                                 "low"))
             latencies.append(res.latency)
             for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
                 usage_acc[k] = usage_acc.get(k, 0) + \

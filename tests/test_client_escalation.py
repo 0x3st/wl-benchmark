@@ -85,7 +85,7 @@ def run(name, steps, check):
 
 # 1. 默认: 显式大额 max_tokens（顶开服务端默认上限）
 run("server output cap lifted by default", [("resp", GOOD)],
-    lambda r, c: (c[0]["max_tokens"] == 65536
+    lambda r, c: (c[0]["max_tokens"] == 8192
                   and c[0]["reasoning_effort"] is None, ""))
 
 # 2. 空内容 → 阶梯: low(65536) → low(server default) → 成功
@@ -115,7 +115,7 @@ run("all-fail diag with attempt history",
 # 5. 正常回复: 不注入任何参数
 run("normal reply: no extra params", [("resp", GOOD)],
     lambda r, c: (c[0]["reasoning_effort"] is None
-                  and c[0]["max_tokens"] == 65536, ""))
+                  and c[0]["max_tokens"] == 8192, ""))
 
 n_ok = sum(results)
 print("-" * 40)

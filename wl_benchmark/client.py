@@ -48,7 +48,7 @@ class ChatClient:
 
     RETRYABLE = (429, 500, 502, 503, 504)
 
-    DEFAULT_MAX_TOKENS = 65536   # lift the server's output cap
+    DEFAULT_MAX_TOKENS = 8192    # matches common server output caps
 
     def __init__(self, base_url: str, api_key: str, timeout: int = 180,
                  max_retries: int = 3, proxy: str = "direct"):
@@ -99,8 +99,14 @@ class ChatClient:
              tool_choice: str = "auto",
              max_tokens: Optional[int] = None,
              temperature: Optional[float] = None,
-             response_format: Optional[Dict[str, Any]] = None) -> ChatResult:
+             response_format: Optional[Dict[str, Any]] = None,
+             reasoning_effort: Optional[str] = None) -> ChatResult:
         body: Dict[str, Any] = {"model": model, "messages": messages}
+        if reasoning_effort:
+            # short-reasoning hint (honored by glm/qwen-class gateways);
+            # in agentic tool loops the data comes from the tools, so a
+            # brief thinking phase is the honest way to run them
+            body["reasoning_effort"] = reasoning_effort
         if tools:
             body["tools"] = tools
             body["tool_choice"] = tool_choice
