@@ -247,6 +247,7 @@ class QuantTask(BaseTask):
         os.makedirs(self.artifacts_dir, exist_ok=True)
         best = None            # (auto_score, final_content, usage, lat, trace)
         error = None
+        attempt_scores: List[float] = []
         for i in range(attempts):
             final_content, err, usage_acc, latencies, tool_trace = \
                 self._tool_loop(client, model)
@@ -255,6 +256,7 @@ class QuantTask(BaseTask):
                 continue
             ans = self._parse_answer(final_content or "")
             auto, _ = self._evaluate(ans)
+            attempt_scores.append(round(auto, 4))
             print(f"[quant] attempt {i + 1}/{attempts}: auto={auto:.2f}",
                   flush=True)
             if best is None or auto > best[0]:
@@ -276,6 +278,12 @@ class QuantTask(BaseTask):
         auto, detail = self._evaluate(ans)
         detail["answer"] = ans
         detail["auto_score"] = round(auto, 4)
+        detail["sampling"] = {
+            "mode": f"best-of-{attempts}",
+            "attempt_scores": attempt_scores,
+            "reasoning_effort": self.run_cfg.get("quant_reasoning_effort",
+                                                 "low"),
+        }
         detail["auto_weight"] = self.spec.get("auto_weight", 0.8)
         detail["note_weight"] = self.spec.get("note_spec", {}).get(
             "weight", 0.2)

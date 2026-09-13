@@ -124,6 +124,14 @@ def _quant_section(r: dict, run_dir: str) -> str:
             h += (f"<p class='meta'>Final = "
                   f"{d.get('auto_weight', 0.8):.0%} x auto ({auto:.2f}) + "
                   f"{d.get('note_weight', 0.2):.0%} x note score.</p>")
+    s = det.get("sampling") or {}
+    if s:
+        h += ("<p class='meta'>sampling: {} — per-attempt auto: {} | "
+              "reasoning_effort={}</p>").format(
+            html.escape(str(s.get("mode", ""))),
+            html.escape(" / ".join(str(x) for x in
+                                   s.get("attempt_scores", []))),
+            html.escape(str(s.get("reasoning_effort", ""))))
     h += "<h3>RESEARCH NOTE</h3>" + _md_artifacts(r, run_dir)
     return h
 
