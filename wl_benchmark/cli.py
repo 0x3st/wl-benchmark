@@ -194,20 +194,14 @@ def _raster_deferred_svgs(out_dir: str) -> None:
         if not svg:
             continue
         png = svg[:-4] + ".png"
-        last_err = None
-        for attempt in range(3):   # headless Chrome aborts flakily
-            try:
-                svg_to_png(svg, png, size=int(det.get("svg_size", 1024)))
-                if png not in r.get("artifacts", []):
-                    r["artifacts"].append(png)
-                det["raster_error"] = None
-                det["raster_blank"] = os.path.getsize(png) < 10_000
-                last_err = None
-                break
-            except Exception as e:  # noqa: BLE001
-                last_err = str(e)[:200]
-        if last_err:
-            det["raster_error"] = last_err
+        try:   # svg_to_png already retries Chrome internally
+            svg_to_png(svg, png, size=int(det.get("svg_size", 1024)))
+            if png not in r.get("artifacts", []):
+                r["artifacts"].append(png)
+            det["raster_error"] = None
+            det["raster_blank"] = os.path.getsize(png) < 10_000
+        except Exception as e:  # noqa: BLE001
+            det["raster_error"] = str(e)[:200]
         changed = True
     if changed:
         with open(path, "w", encoding="utf-8") as f:

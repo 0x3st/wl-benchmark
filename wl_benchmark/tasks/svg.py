@@ -235,13 +235,22 @@ def svg_checks(svg: str, stage: str, picks: Dict[str, str]) -> List[dict]:
     return out
 
 
-def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
-    """Rasterize SVG -> PNG. Returns png path; raises on total failure."""
-    if shutil.which("rsvg-convert"):
-        subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size),
-                        "-o", png_path, svg_path], check=True)
-        return png_path
+def _raster_rsvg(svg_path: str, png_path: str, size: int) -> str:
+    """librsvg: deterministic, ~0.1s, no browser involved."""
+    subprocess.run(["rsvg-convert", "-w", str(size), "-h", str(size),
+                    "-o", png_path, svg_path], check=True)
+    return png_path
 
+
+def _raster_chrome(svg_path: str, png_path: str, size: int,
+                   attempts: int = 3) -> str:
+    """Headless-Chrome screenshot fallback.
+
+    Headless Chrome aborts flakily (SIGABRT at startup, exit -6) on
+    some hosts — retry with a fresh profile each time; a working
+    capture takes ~2s, so the retries are cheap unless Chrome hangs.
+    """
+    from ..chrome_capture import run_chrome_capture
     chrome = None
     # google-chrome first: on Ubuntu /usr/bin/chromium is a snap wrapper
     # that misbehaves in headless environments
@@ -251,37 +260,66 @@ def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
         if cand and os.path.exists(cand):
             chrome = cand
             break
-    if chrome:
-        # the path must be absolute, or the file:// URL is invalid and Chrome renders an error page
-        svg_path = os.path.abspath(svg_path)
-        png_path = os.path.abspath(png_path)
-        html = svg_path + ".wrap.html"
-        with open(svg_path, encoding="utf-8") as f:
-            svg = f.read()
-        with open(html, "w", encoding="utf-8") as f:
-            f.write(f'<body style="margin:0;background:#fff">'
-                    f'<div style="width:{size}px;height:{size}px">{svg}</div>')
+    if not chrome:
+        raise FileNotFoundError("no Chrome binary found")
+    # the path must be absolute, or the file:// URL is invalid and Chrome renders an error page
+    svg_path = os.path.abspath(svg_path)
+    png_path = os.path.abspath(png_path)
+    with open(svg_path, encoding="utf-8") as f:
+        svg = f.read()
+    last_err: Exception = RuntimeError("no capture attempted")
+    for attempt in range(attempts):
         user_data = tempfile.mkdtemp(prefix="wlb-chrome-")
-        # --no-sandbox: Chrome's own seatbelt cannot nest inside the wlb
-        # outer sandbox; the outer profile + SVG sanitization cover the
-        # renderer instead.
-        from ..chrome_capture import run_chrome_capture
-        run_chrome_capture(
-            [chrome, "--headless=new", "--disable-gpu",
-             "--force-device-scale-factor=1",
-             f"--user-data-dir={user_data}",
-             "--no-sandbox", "--disable-crashpad",
-             "--disable-crash-reporter",
-             # on some headless environments (CI runners) Chrome never
-             # renders the capture without a virtual time budget
-             "--virtual-time-budget=2000",
-             f"--screenshot={png_path}", f"--window-size={size},{size}",
-             "--default-background-color=FFFFFF", "file://" + html],
-            png_path, timeout=60)
-        os.remove(html)
-        shutil.rmtree(user_data, ignore_errors=True)
-        return png_path
-    raise RuntimeError("no rsvg-convert or Chrome found for SVG rasterization")
+        html = f"{svg_path}.wrap{attempt}.html"
+        try:
+            with open(html, "w", encoding="utf-8") as f:
+                f.write(f'<body style="margin:0;background:#fff">'
+                        f'<div style="width:{size}px;height:{size}px">{svg}</div>')
+            # --no-sandbox: Chrome's own seatbelt cannot nest inside the wlb
+            # outer sandbox; the outer profile + SVG sanitization cover the
+            # renderer instead.
+            run_chrome_capture(
+                [chrome, "--headless=new", "--disable-gpu",
+                 "--force-device-scale-factor=1",
+                 f"--user-data-dir={user_data}",
+                 "--no-sandbox", "--disable-crashpad",
+                 "--disable-crash-reporter",
+                 # on some headless environments (CI runners) Chrome never
+                 # renders the capture without a virtual time budget
+                 "--virtual-time-budget=2000",
+                 f"--screenshot={png_path}", f"--window-size={size},{size}",
+                 "--default-background-color=FFFFFF", "file://" + html],
+                png_path, timeout=60)
+            return png_path
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+        finally:
+            try:
+                os.remove(html)
+            except OSError:
+                pass
+            shutil.rmtree(user_data, ignore_errors=True)
+    raise last_err
+
+
+def svg_to_png(svg_path: str, png_path: str, size: int = 1024) -> str:
+    """Rasterize SVG -> PNG. Returns png path; raises on total failure.
+
+    Chain: rsvg-convert (preferred) -> headless Chrome (retried)."""
+    errors = []
+    if shutil.which("rsvg-convert"):
+        try:
+            return _raster_rsvg(svg_path, png_path, size)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"rsvg-convert: {e}")
+    try:
+        return _raster_chrome(svg_path, png_path, size)
+    except FileNotFoundError:
+        errors.append("no rsvg-convert or Chrome found for SVG rasterization")
+    except Exception as e:  # noqa: BLE001
+        errors.append(f"chrome: {e}")
+    raise RuntimeError("; ".join(errors) or
+                       "no rsvg-convert or Chrome found for SVG rasterization")
 
 
 class SvgTask(BaseTask):
@@ -318,18 +356,17 @@ class SvgTask(BaseTask):
         artifacts = [svg_path]
         png_path = svg_path.replace(".svg", ".png")
         raster_error = None
+        d_raster_deferred = False
         if os.environ.get("WL_BENCH_SANDBOX"):
             # the sandbox denies Chrome's internal AF_UNIX IPC — the
             # parent rasterizes deferred SVGs outside the sandbox
             # (the SVG is sanitized above, so this is safe)
             d_raster_deferred = True
-            raster_error = None
         elif not svg_ok:
             # unparsable SVG is never loaded into Chrome: the HTML parser
             # is forgiving and may still execute embedded scripts
             raster_error = "not rastered: SVG is not well-formed XML"
         else:
-            d_raster_deferred = False
             try:
                 svg_to_png(svg_path, png_path, size)
                 artifacts.append(png_path)

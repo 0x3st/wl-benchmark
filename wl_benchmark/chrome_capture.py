@@ -57,3 +57,8 @@ def run_chrome_capture(cmd: list, out_path: str, timeout: float = 60) -> None:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        err_file.close()
+        try:
+            os.unlink(err_file.name)   # no per-capture temp leak
+        except OSError:
+            pass
