@@ -6,8 +6,9 @@ Stage 2  relation:     pick two persons from A; draw a COMPLETE illustration
                        of how they are indirectly related
 Stage 3  architecture: pick one item from B; draw its architecture diagram
 
-Each stage runs once per model; random picks are recorded in detail
-(reproducible via spec.seed). Output: SVG + PNG — a human grades the PNG,
+Each stage runs once per model; word picks are random per run and the
+actual seed is recorded in detail (pass "seed" in the spec to pin it).
+Output: SVG + PNG — a human grades the PNG,
 no model-based judging.
 
 Scenario JSON schema:
@@ -16,7 +17,7 @@ Scenario JSON schema:
   "stage": "riding" | "relation" | "architecture",
   "set_a": ["Xu Yangsheng (President)", "..."],     # riding/relation
   "set_b": ["iPhone", "..."],                        # riding/architecture
-  "seed": 20260910                                   # optional, reproducible picks
+  "seed": null                                        # optional; random when unset
 }
 """
 from __future__ import annotations
@@ -59,8 +60,12 @@ def discover(root: str) -> List[Dict[str, Any]]:
 
 def build_instruction(spec: Dict[str, Any]) -> Dict[str, Any]:
     """Pick words per stage and compose the instruction. Returns
-    {"instruction": ..., "picks": {...}}."""
-    rng = random.Random(spec.get("seed"))
+    {"instruction": ..., "picks": {...}, "seed": int} — the seed is
+    recorded so any run's picks can be reproduced."""
+    seed = spec.get("seed")
+    if seed is None:   # fully random per run unless the spec pins a seed
+        seed = random.randrange(2**32)
+    rng = random.Random(seed)
     stage = spec["stage"]
     picks: Dict[str, str] = {}
 
@@ -98,7 +103,7 @@ def build_instruction(spec: Dict[str, Any]) -> Dict[str, Any]:
     else:
         raise ValueError(f"unknown svg stage: {stage}")
 
-    return {"instruction": instr, "picks": picks}
+    return {"instruction": instr, "picks": picks, "seed": seed}
 
 
 def extract_svg(text: str) -> str:
@@ -389,6 +394,7 @@ class SvgTask(BaseTask):
             detail={"status": "pending-human-review",
                     "stage": self.spec.get("stage"),
                     "picks": built["picks"],
+                    "rng_seed": built["seed"],
                     "constraints": checks,
                     "constraints_passed": sum(1 for c in checks if c["ok"]),
                     "constraints_total": len(checks),
