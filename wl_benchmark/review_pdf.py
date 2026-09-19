@@ -241,7 +241,8 @@ def _task_section(r: dict, run_dir: str) -> str:
 CSS = """
 @page { size: A4; margin: 0; }
 body { font-family: "PingFang SC","Hiragino Sans GB",Georgia,serif; font-size: 12px;
-       line-height: 1.65; color: #24292f; max-width: 760px; margin: 0 auto; padding: 40px 48px; }
+       line-height: 1.65; color: #24292f; max-width: 760px; margin: 0 auto; padding: 40px 48px;
+       overflow-wrap: anywhere; }
 h1 { font-size: 22px; border-bottom: 3px solid #0969da; padding-bottom: 8px; }
 h2 { font-size: 16px; border-bottom: 1px solid #d0d7de; padding-bottom: 4px; margin: 24px 0 10px; color: #0969da; }
 h3 { font-size: 13.5px; margin: 14px 0 6px; color: #333; }
@@ -249,7 +250,10 @@ table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 11px;
 th { background: #f0f4fa; text-align: left; }
 th, td { border: 1px solid #d0d7de; padding: 4px 8px; }
 img { max-width: 100%; border: 1px solid #eee; margin: 8px 0; }
-pre { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; font-size: 10.5px; overflow-x: hidden; }
+pre { background: #f6f8fa; padding: 10px 12px; border-radius: 6px; font-size: 10.5px;
+      /* pre-wrap + anywhere: overflow-x:hidden used to CLIP long JSON
+         lines off the printed page — reviewers lost data */
+      white-space: pre-wrap; overflow-wrap: anywhere; }
 code { font-family: Menlo,monospace; font-size: 10.5px; background: #f0f2f5; padding: 1px 4px; border-radius: 3px; }
 pre code { background: none; padding: 0; }
 .task { page-break-before: always; }
